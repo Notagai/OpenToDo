@@ -34,15 +34,16 @@
 
         <Grid Grid.Row="1" Margin="0,24,0,0">
           <StackPanel x:Name="HomePanel" Spacing="18">
-            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+            <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="10">
               <Border Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="Tasks completed" Classes="muted" /><TextBlock x:Name="CompletedTotal" Text="0" FontSize="34" FontWeight="Bold" /></StackPanel></Border>
               <Border Grid.Column="1" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="Today" Classes="muted" /><TextBlock x:Name="CompletedDay" Text="0" FontSize="34" FontWeight="Bold" /></StackPanel></Border>
-              <Border Grid.Column="2" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This week" Classes="muted" /><TextBlock x:Name="CompletedWeek" Text="0" FontSize="34" FontWeight="Bold" />
-            <TextBlock x:Name="CompletedMonth" Text="0" /></StackPanel></Border>
-              <Border Grid.Column="3" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This year" Classes="muted" /><TextBlock x:Name="CompletedYear" Text="0" FontSize="34" FontWeight="Bold" /></StackPanel></Border>
+              <Border Grid.Column="2" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This week" Classes="muted" /><TextBlock x:Name="CompletedWeek" Text="0" FontSize="30" FontWeight="Bold" /></StackPanel></Border>
+              <Border Grid.Column="3" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This month" Classes="muted" /><TextBlock x:Name="CompletedMonth" Text="0" FontSize="30" FontWeight="Bold" /></StackPanel></Border>
+              <Border Grid.Column="4" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This year" Classes="muted" /><TextBlock x:Name="CompletedYear" Text="0" FontSize="30" FontWeight="Bold" /></StackPanel></Border>
             </Grid>
 
             <Grid ColumnDefinitions="*,*" ColumnSpacing="18">
+              <Border Classes="card" Padding="18">
               <Border Classes="card" Padding="18">
                 <StackPanel Spacing="12">
                   <StackPanel><TextBlock Text="Last 14 days" FontSize="19" FontWeight="SemiBold" /><TextBlock Text="Completion activity by day." Classes="muted" /></StackPanel>
