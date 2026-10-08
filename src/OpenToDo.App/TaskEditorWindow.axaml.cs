@@ -10,9 +10,10 @@ public partial class TaskEditorWindow : Window
     private readonly TaskItem _original;
     public TaskItem? Result { get; private set; }
 
-    public TaskEditorWindow(TaskItem task)
+    public TaskEditorWindow(TaskItem task, bool isNew = false)
     {
         _original = task;
+        Title = isNew ? "Make event" : "Edit event";
         InitializeComponent();
         TitleBox.Text = task.Title;
         DescriptionBox.Text = task.Description ?? string.Empty;
