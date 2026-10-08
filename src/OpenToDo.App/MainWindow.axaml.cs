@@ -180,6 +180,18 @@ public partial class MainWindow : Window
         });
     }
 
+    private async void Restore_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task } || !task.IsCompleted)
+            return;
+
+        await RunMutationAsync(async () =>
+        {
+            await _repository.SaveAsync(task with { IsCompleted = false });
+            await LoadTasksAsync();
+        });
+    }
+
     private async void Delete_OnClick(object? sender, RoutedEventArgs e)
     {
         if (_mutationInProgress || sender is not Button { DataContext: TaskItem task })
