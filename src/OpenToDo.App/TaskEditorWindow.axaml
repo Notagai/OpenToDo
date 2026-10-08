@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenToDo.App.TaskEditorWindow" Width="560" Height="520" MinWidth="480" MinHeight="440" Title="Edit task" WindowStartupLocation="CenterOwner">
+  <Border Padding="26"><Grid RowDefinitions="Auto,Auto,Auto,Auto,* ,Auto" RowSpacing="14">
+    <TextBlock Text="Task details" FontSize="25" FontWeight="Bold"/>
+    <TextBlock Grid.Row="1" Text="Title"/>
+    <TextBox Grid.Row="2" x:Name="TitleBox" PlaceholderText="Task title"/>
+    <TextBlock Grid.Row="3" Text="Description"/>
+    <TextBox Grid.Row="4" x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" Height="130" PlaceholderText="Optional notes"/>
+    <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+      <TextBox x:Name="DueDateBox" Watermark="Due date (YYYY-MM-DD)" VerticalAlignment="Center"/>
+      <Button Grid.Column="1" Content="Cancel" Click="Cancel_OnClick"/>
+      <Button Grid.Column="2" Classes="primary" Content="Save changes" Click="Save_OnClick"/>
+    </Grid>
+  </Grid></Border>
+</Window>
