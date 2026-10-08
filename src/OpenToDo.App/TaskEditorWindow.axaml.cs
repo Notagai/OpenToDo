@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using OpenToDo.Core;
@@ -15,18 +16,38 @@ public partial class TaskEditorWindow : Window
         InitializeComponent();
         TitleBox.Text = task.Title;
         DescriptionBox.Text = task.Description ?? string.Empty;
-        DueDateBox.Text = task.DueDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+        DueDateBox.Text = task.DueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
     private void Save_OnClick(object? sender, RoutedEventArgs e)
     {
         var title = TitleBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(title)) return;
+        if (string.IsNullOrWhiteSpace(title))
+            return;
+
         DateTimeOffset? dueDate = null;
         var dueText = DueDateBox.Text?.Trim();
-        if (!string.IsNullOrWhiteSpace(dueText) && DateTime.TryParse(dueText, out var parsed))
-            dueDate = new DateTimeOffset(parsed.Date);
-        Result = _original with { Title = title, Description = string.IsNullOrWhiteSpace(DescriptionBox.Text) ? null : DescriptionBox.Text.Trim(), DueDate = dueDate };
+
+        if (!string.IsNullOrWhiteSpace(dueText))
+        {
+            if (!DateTime.TryParseExact(
+                    dueText,
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var parsed))
+                return;
+
+            dueDate = new DateTimeOffset(parsed.Date, TimeZoneInfo.Local.GetUtcOffset(parsed.Date));
+        }
+
+        Result = _original with
+        {
+            Title = title,
+            Description = string.IsNullOrWhiteSpace(DescriptionBox.Text) ? null : DescriptionBox.Text.Trim(),
+            DueDate = dueDate
+        };
+
         Close(Result);
     }
 
