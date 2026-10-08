@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0</TargetFramework><RootNamespace>OpenToDo.App</RootNamespace></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OpenToDo.Core\OpenToDo.Core.csproj" />
+    <ProjectReference Include="..\OpenToDo.Data\OpenToDo.Data.csproj" />
+    <ProjectReference Include="..\OpenToDo.Plugins\OpenToDo.Plugins.csproj" />
+  </ItemGroup>
+</Project>
