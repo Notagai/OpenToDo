@@ -4,9 +4,13 @@
     <Style Selector="Window">
       <Setter Property="FontFamily" Value="Inter, Segoe UI, sans-serif" />
     </Style>
+    <Style Selector="TextBox, ComboBox, NumericUpDown">
+      <Setter Property="MinHeight" Value="40" />
+    </Style>
     <Style Selector="Button">
       <Setter Property="MinHeight" Value="38" />
-      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="Padding" Value="16,9" />
+      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.nav">
       <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -16,6 +20,13 @@
     <Style Selector="Button.nav:pointerover">
       <Setter Property="Background" Value="#16000000" />
     </Style>
+    <Style Selector="Button.chart-toggle">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.subtle"> <Setter Property="MinHeight" Value="34" /> </Style>
+    <Style Selector="Button.danger"> <Setter Property="MinHeight" Value="34" /> </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="#2563EB" />
       <Setter Property="Foreground" Value="White" />
