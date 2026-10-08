@@ -1,8 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:core="using:OpenToDo.Core" xmlns:app="using:OpenToDo.App" x:Class="OpenToDo.App.MainWindow" Width="1180" Height="800" MinWidth="900" MinHeight="620" Title="OpenToDo">
   <Grid ColumnDefinitions="230,*">
     <Border Grid.Column="0" Background="#111318" Padding="18"><Grid RowDefinitions="Auto,*,Auto">
-      <StackPanel Spacing="7"><TextBlock Text="OpenToDo" FontSize="27" FontWeight="Bold" Foreground="#FFFFFF" Margin="4,2,0,22"/><Button Classes="nav" Content="⌂   Home" Click="Home_OnClick"/><Button Classes="nav" Content="☐   Todo" Click="Todo_OnClick"/><Button Classes="nav" Content="✓   Completed" Click="Completed_OnClick"/></StackPanel>
-      <StackPanel Grid.Row="2" Spacing="8"><TextBlock Text="LOCAL-FIRST" FontSize="11" FontWeight="Bold" Foreground="#9CA3AF" Margin="4,0"/><Button Classes="nav" Content="⚙   Settings" Click="Settings_OnClick"/></StackPanel>
+      <StackPanel Spacing="7"><TextBlock Text="OpenToDo" FontSize="27" FontWeight="Bold" Foreground="#FFFFFF" Margin="4,2,0,22"/><Button Classes="nav" Content="Home" Click="Home_OnClick"/><Button Classes="nav" Content="Todo" Click="Todo_OnClick"/><Button Classes="nav" Content="Completed" Click="Completed_OnClick"/></StackPanel>
+      <StackPanel Grid.Row="2" Spacing="8"><TextBlock Text="LOCAL-FIRST" FontSize="11" FontWeight="Bold" Foreground="#9CA3AF" Margin="4,0"/><Button Classes="nav" Content="Settings" Click="Settings_OnClick"/></StackPanel>
     </Grid></Border>
     <ScrollViewer Grid.Column="1"><Grid Margin="34" RowDefinitions="Auto,*">
       <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="5"><TextBlock x:Name="PageTitle" Text="Home" FontSize="32" FontWeight="Bold"/><TextBlock x:Name="PageSubtitle" Text="Your productivity overview." Classes="muted" Foreground="#6B7280"/></StackPanel><Button Grid.Column="1" Classes="primary" Content="Make event" Click="NewTask_OnClick" VerticalAlignment="Top"/></Grid>
