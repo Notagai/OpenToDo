@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using KeySharp;
 
@@ -7,8 +5,8 @@ namespace OpenToDo.Plugins.Ai;
 
 public sealed class AiSettingsStore
 {
+    private const string Application = "com.notagai.opentodo";
     private const string Service = "OpenToDo";
-    private const string AccountPrefix = "ai-api-key:";
     private readonly string _path;
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
@@ -93,7 +91,7 @@ public sealed class AiSettingsStore
         return string.Empty;
     }
 
-    private static string Account(AiProvider provider) => AccountPrefix + provider.ToString().ToLowerInvariant();
+    private static string Account(AiProvider provider) => provider.ToString().ToLowerInvariant();
 
     private static Task<string?> GetSecretAsync(AiProvider provider)
     {
@@ -101,26 +99,16 @@ public sealed class AiSettingsStore
         {
             try
             {
-                var stored = Keyring.GetPassword(Service, Account(provider), "api-key");
-                if (string.IsNullOrEmpty(stored))
-                    return null;
-
-                if (!OperatingSystem.IsWindows() || !stored.StartsWith("dpapi:", StringComparison.Ordinal))
-                    return stored;
-
-                var encrypted = Convert.FromBase64String(stored["dpapi:".Length..]);
-                var plain = ProtectedData.Unprotect(
-                    encrypted,
-                    Encoding.UTF8.GetBytes(Service),
-                    DataProtectionScope.CurrentUser);
-
-                return Encoding.UTF8.GetString(plain);
+                return Keyring.GetPassword(
+                    Application,
+                    Service,
+                    Account(provider));
             }
-            catch (PlatformNotSupportedException)
+            catch (KeyringException)
             {
                 return null;
             }
-            catch (CryptographicException)
+            catch (PlatformNotSupportedException)
             {
                 return null;
             }
@@ -133,28 +121,23 @@ public sealed class AiSettingsStore
         {
             if (string.IsNullOrEmpty(secret))
             {
-                try { Keyring.DeletePassword(Service, Account(provider), "api-key"); } catch { }
+                try
+                {
+                    Keyring.DeletePassword(Application, Service, Account(provider));
+                }
+                catch (KeyringException)
+                {
+                    // Nothing to delete.
+                }
+
                 return;
             }
 
-            if (OperatingSystem.IsWindows())
-            {
-                // Windows DPAPI, current-user scope. The encrypted value never
-                // goes into settings.json.
-                var protectedBytes = ProtectedData.Protect(
-                    Encoding.UTF8.GetBytes(secret),
-                    Encoding.UTF8.GetBytes(Service),
-                    DataProtectionScope.CurrentUser);
-
-                Keyring.SetPassword(
-                    Service,
-                    Account(provider),
-                    "dpapi:" + Convert.ToBase64String(protectedBytes));
-                return;
-            }
-
-            // Linux/macOS: KeySharp uses the OS keyring / Secret Service.
-            Keyring.SetPassword(Service, Account(provider), "api-key", secret);
+            Keyring.SetPassword(
+                Application,
+                Service,
+                Account(provider),
+                secret);
         });
     }
 }
