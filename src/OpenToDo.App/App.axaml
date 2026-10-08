@@ -24,7 +24,6 @@
 
     <Style Selector="TextBox:focus, ComboBox:focus, NumericUpDown:focus">
       <Setter Property="BorderBrush" Value="#5E6AD2"/>
-      <Setter Property="BoxShadow" Value="0 0 0 3 #185E6AD2"/>
     </Style>
 
     <Style Selector="Button">
