@@ -1,0 +1,10 @@
+# Build output
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+.opentodo/
+.DS_Store
+Thumbs.db
