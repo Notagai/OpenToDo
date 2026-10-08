@@ -49,11 +49,6 @@ public partial class MainWindow : Window
             _ => _tasks.Where(t => !t.IsCompleted).ToArray()
         };
 
-        var isCompletedView = _currentView == "completed";
-        foreach (var item in TaskList.ItemsView)
-        {
-            // Button visibility is handled by the item template below.
-        }
     }
 
     private async void AddTask_OnClick(object? sender, RoutedEventArgs e)
@@ -68,17 +63,10 @@ public partial class MainWindow : Window
         await LoadTasksAsync();
     }
 
-    private async void Complete_OnClick(object? sender, RoutedEventArgs e)
+    private async void ToggleCompleted_OnClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: TaskItem task }) return;
-        await _repository.SaveAsync(task with { IsCompleted = true });
-        await LoadTasksAsync();
-    }
-
-    private async void Restore_OnClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { DataContext: TaskItem task }) return;
-        await _repository.SaveAsync(task with { IsCompleted = false });
+        await _repository.SaveAsync(task with { IsCompleted = !task.IsCompleted });
         await LoadTasksAsync();
     }
 
