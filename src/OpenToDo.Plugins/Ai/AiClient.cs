@@ -134,7 +134,7 @@ public sealed class AiClient
             model,
             messages = new[] { new { role = "user", content = prompt } },
             temperature,
-            max_tokens = maxOutputTokens
+            max_completion_tokens = maxOutputTokens
         };
 
         using var response = await SendJsonAsync(
