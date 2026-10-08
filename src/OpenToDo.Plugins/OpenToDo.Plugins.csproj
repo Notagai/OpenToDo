@@ -1,1 +1,5 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><RootNamespace>OpenToDo.Plugins</RootNamespace></PropertyGroup><ItemGroup><ProjectReference Include="..\OpenToDo.Core\OpenToDo.Core.csproj" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><RootNamespace>OpenToDo.Plugins</RootNamespace></PropertyGroup><ItemGroup><ProjectReference Include="..\OpenToDo.Core\OpenToDo.Core.csproj" /></ItemGroup><ItemGroup>
+  <PackageReference Include="keyring-dotnet" Version="1.2.0" />
+  <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.2" />
+</ItemGroup>
+</Project>
