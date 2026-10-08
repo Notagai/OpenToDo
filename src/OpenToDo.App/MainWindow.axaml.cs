@@ -116,26 +116,21 @@ public partial class MainWindow : Window
         ChartSubtitle.Text = "Last 14 days · exact counts";
     }
 
-    private void NewTask_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _currentView = "todo";
-        RefreshTaskList();
-        TaskTitle.Focus();
-    }
-
-    private async void AddTask_OnClick(object? sender, RoutedEventArgs e)
+    private async void NewTask_OnClick(object? sender, RoutedEventArgs e)
     {
         if (_mutationInProgress)
             return;
 
-        var title = TaskTitle.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(title))
+        var editor = new TaskEditorWindow(new TaskItem(Guid.NewGuid().ToString("N"), string.Empty));
+        var result = await editor.ShowDialog<TaskItem?>(this);
+
+        if (result is null)
             return;
 
         await RunMutationAsync(async () =>
         {
-            await _repository.SaveAsync(new TaskItem(Guid.NewGuid().ToString("N"), title));
-            TaskTitle.Text = string.Empty;
+            await _repository.SaveAsync(result);
+            _currentView = "todo";
             await LoadTasksAsync();
         });
     }
