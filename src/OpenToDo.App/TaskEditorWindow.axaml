@@ -1,8 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenToDo.App.TaskEditorWindow" Width="560" Height="520" MinWidth="480" MinHeight="440" Title="Edit task" WindowStartupLocation="CenterOwner">
-  <Border Background="#FFFFFF" Padding="26">
+  <Border Background="#181A1F" Padding="26">
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,* ,Auto" RowSpacing="12">
-      <TextBlock Text="Task details" FontSize="24" FontWeight="Bold" Foreground="#111827"/>
-      <TextBlock Grid.Row="1" Text="Title" Foreground="#374151" FontSize="12" FontWeight="SemiBold"/>
+      <TextBlock Text="Task details" FontSize="24" FontWeight="Bold" Foreground="#ECEEF1"/>
+      <TextBlock Grid.Row="1" Text="Title" Foreground="#B9BEC7" FontSize="12" FontWeight="SemiBold"/>
       <TextBox Grid.Row="2" x:Name="TitleBox" PlaceholderText="Task title"/>
       <TextBlock Grid.Row="3" Text="Description" Foreground="#374151" FontSize="12" FontWeight="SemiBold"/>
       <TextBox Grid.Row="4" x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" Height="130" PlaceholderText="Optional notes"/>
