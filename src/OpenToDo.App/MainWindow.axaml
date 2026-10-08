@@ -44,7 +44,6 @@
 
             <Grid ColumnDefinitions="*,*" ColumnSpacing="18">
               <Border Classes="card" Padding="18">
-              <Border Classes="card" Padding="18">
                 <StackPanel Spacing="12">
                   <StackPanel><TextBlock Text="Last 14 days" FontSize="19" FontWeight="SemiBold" /><TextBlock Text="Completion activity by day." Classes="muted" /></StackPanel>
                   <ItemsControl x:Name="DailyChart">
