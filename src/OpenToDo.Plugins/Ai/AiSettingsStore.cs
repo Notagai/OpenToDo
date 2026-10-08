@@ -101,9 +101,26 @@ public sealed class AiSettingsStore
         {
             try
             {
-                return Keyring.GetPassword(Service, Account(provider), "api-key");
+                var stored = Keyring.GetPassword(Service, Account(provider), "api-key");
+                if (string.IsNullOrEmpty(stored))
+                    return null;
+
+                if (!OperatingSystem.IsWindows() || !stored.StartsWith("dpapi:", StringComparison.Ordinal))
+                    return stored;
+
+                var encrypted = Convert.FromBase64String(stored["dpapi:".Length..]);
+                var plain = ProtectedData.Unprotect(
+                    encrypted,
+                    Encoding.UTF8.GetBytes(Service),
+                    DataProtectionScope.CurrentUser);
+
+                return Encoding.UTF8.GetString(plain);
             }
             catch (PlatformNotSupportedException)
+            {
+                return null;
+            }
+            catch (CryptographicException)
             {
                 return null;
             }
@@ -115,7 +132,10 @@ public sealed class AiSettingsStore
         return Task.Run(() =>
         {
             if (string.IsNullOrEmpty(secret))
+            {
+                try { Keyring.DeletePassword(Service, Account(provider), "api-key"); } catch { }
                 return;
+            }
 
             if (OperatingSystem.IsWindows())
             {
