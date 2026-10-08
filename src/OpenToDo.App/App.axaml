@@ -1,0 +1,1 @@
+<Application xmlns="https://github.com/avaloniaui" x:Class="OpenToDo.App.App" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><Application.Styles><FluentTheme /></Application.Styles></Application>
