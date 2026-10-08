@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/avalonia" x:Class="OpenToDo.App.TaskEditorWindow" Width="560" Height="520" MinWidth="480" MinHeight="440" Title="Edit task" WindowStartupLocation="CenterOwner">
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenToDo.App.TaskEditorWindow" Width="560" Height="520" MinWidth="480" MinHeight="440" Title="Edit task" WindowStartupLocation="CenterOwner">
   <Border Background="#FFFFFF" Padding="26">
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,* ,Auto" RowSpacing="12">
       <TextBlock Text="Task details" FontSize="24" FontWeight="Bold" Foreground="#111827"/>
