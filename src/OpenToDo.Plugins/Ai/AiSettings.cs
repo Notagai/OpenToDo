@@ -2,12 +2,15 @@ namespace OpenToDo.Plugins.Ai;
 
 public sealed class AiSettings
 {
+    [System.Text.Json.Serialization.JsonIgnore]
     public string OpenAiApiKey { get; set; } = string.Empty;
     public string OpenAiModel { get; set; } = string.Empty;
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public string GroqApiKey { get; set; } = string.Empty;
     public string GroqModel { get; set; } = string.Empty;
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public string OpenRouterApiKey { get; set; } = string.Empty;
     public string OpenRouterModel { get; set; } = string.Empty;
 
