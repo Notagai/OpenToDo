@@ -5,7 +5,7 @@
     <!-- Clawnify/OpenToDo-inspired neutral UI: warm canvas, white surfaces, indigo accent. -->
     <Style Selector="Window">
       <Setter Property="FontFamily" Value="Inter, Segoe UI, sans-serif"/>
-      <Setter Property="Background" Value="#F8F9FB"/>
+      <Setter Property="Background" Value="#E7E8EA"/>
       <Setter Property="Foreground" Value="#111827"/>
     </Style>
 
@@ -31,71 +31,73 @@
       <Setter Property="Padding" Value="12,7"/>
       <Setter Property="FontWeight" Value="Medium"/>
       <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Background" Value="#E5E7EB"/>
-      <Setter Property="Foreground" Value="#111827"/>
-      <Setter Property="BorderBrush" Value="#D1D5DB"/>
+      <Setter Property="Background" Value="#E3E5E8"/>
+      <Setter Property="Foreground" Value="#25282D"/>
+      <Setter Property="BorderBrush" Value="#C9CDD3"/>
       <Setter Property="BorderThickness" Value="1"/>
     </Style>
 
     <Style Selector="Button:pointerover">
-      <Setter Property="Background" Value="#DDE1E8"/>
-      <Setter Property="Foreground" Value="#111827"/>
+      <Setter Property="Background" Value="#E3E5E8"/>
+      <Setter Property="Foreground" Value="#25282D"/>
+      <Setter Property="BorderBrush" Value="#C9CDD3"/>
     </Style>
 
     <Style Selector="Button:pressed">
-      <Setter Property="Background" Value="#D1D5DB"/>
+      <Setter Property="Background" Value="#DADDE1"/>
     </Style>
 
     <Style Selector="Button:focus-visible">
-      <Setter Property="BorderBrush" Value="#5E6AD2"/>
-      <Setter Property="BorderThickness" Value="2"/>
+      <Setter Property="BorderBrush" Value="#8B93A6"/>
+      <Setter Property="BorderThickness" Value="1"/>
     </Style>
 
     <Style Selector="Button.primary">
-      <Setter Property="Background" Value="#5E6AD2"/>
+      <Setter Property="Background" Value="#596275"/>
       <Setter Property="Foreground" Value="#FFFFFF"/>
-      <Setter Property="BorderBrush" Value="#5E6AD2"/>
+      <Setter Property="BorderBrush" Value="#596275"/>
     </Style>
 
     <Style Selector="Button.primary:pointerover">
-      <Setter Property="Background" Value="#4F5AC0"/>
+      <Setter Property="Background" Value="#596275"/>
       <Setter Property="Foreground" Value="#FFFFFF"/>
-      <Setter Property="BorderBrush" Value="#4F5AC0"/>
+      <Setter Property="BorderBrush" Value="#596275"/>
     </Style>
 
     <Style Selector="Button.primary:pressed">
-      <Setter Property="Background" Value="#434DAA"/>
-      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="Background" Value="#4F5769"/>
     </Style>
 
     <Style Selector="Button.danger">
       <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="Background" Value="#FEF2F2"/>
-      <Setter Property="Foreground" Value="#B91C1C"/>
-      <Setter Property="BorderBrush" Value="#FECACA"/>
+      <Setter Property="Background" Value="#F1E4E4"/>
+      <Setter Property="Foreground" Value="#8F3A3A"/>
+      <Setter Property="BorderBrush" Value="#D9BDBD"/>
     </Style>
 
     <Style Selector="Button.danger:pointerover">
-      <Setter Property="Background" Value="#FEE2E2"/>
-      <Setter Property="Foreground" Value="#991B1B"/>
+      <Setter Property="Background" Value="#F1E4E4"/>
+      <Setter Property="Foreground" Value="#8F3A3A"/>
+      <Setter Property="BorderBrush" Value="#D9BDBD"/>
     </Style>
 
     <Style Selector="Button.subtle">
       <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="Background" Value="#F3F4F6"/>
-      <Setter Property="Foreground" Value="#374151"/>
-      <Setter Property="BorderBrush" Value="#E5E7EB"/>
+      <Setter Property="Background" Value="#E3E5E8"/>
+      <Setter Property="Foreground" Value="#454A53"/>
+      <Setter Property="BorderBrush" Value="#C9CDD3"/>
     </Style>
 
     <Style Selector="Button.subtle:pointerover">
-      <Setter Property="Background" Value="#E5E7EB"/>
-      <Setter Property="Foreground" Value="#111827"/>
+      <Setter Property="Background" Value="#E3E5E8"/>
+      <Setter Property="Foreground" Value="#454A53"/>
+      <Setter Property="BorderBrush" Value="#C9CDD3"/>
     </Style>
 
     <Style Selector="Button.nav">
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
       <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Foreground" Value="#9CA3AF"/>
+      <Setter Property="Foreground" Value="#A5ABB5"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Opacity" Value="1"/>
       <Setter Property="CornerRadius" Value="6"/>
@@ -103,8 +105,8 @@
     </Style>
 
     <Style Selector="Button.nav:pointerover">
-      <Setter Property="Background" Value="#FFFFFF12"/>
-      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="Background" Value="#1A1D23"/>
+      <Setter Property="Foreground" Value="#D7DAE0"/>
     </Style>
 
     <Style Selector="Button.chart-toggle">
@@ -118,45 +120,53 @@
       <Setter Property="Height" Value="32"/>
       <Setter Property="MinHeight" Value="32"/>
       <Setter Property="Padding" Value="0"/>
-      <Setter Property="FontSize" Value="18"/>
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Foreground" Value="#5E6AD2"/>
+      <Setter Property="FontSize" Value="17"/>
+      <Setter Property="Background" Value="#E3E5E8"/>
+      <Setter Property="BorderBrush" Value="#C9CDD3"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground" Value="#596275"/>
     </Style>
 
     <Style Selector="Button.check:pointerover">
-      <Setter Property="Background" Value="#E4E7F7"/>
-      <Setter Property="Foreground" Value="#4F5AC0"/>
+      <Setter Property="Background" Value="#E3E5E8"/>
+      <Setter Property="Foreground" Value="#596275"/>
+      <Setter Property="BorderBrush" Value="#C9CDD3"/>
     </Style>
 
     <Style Selector="Button.completed-check">
-      <Setter Property="Foreground" Value="#16A34A"/>
-      <Setter Property="Background" Value="#E8F5EC"/>
-      <Setter Property="BorderBrush" Value="#BBF7D0"/>
+      <Setter Property="Foreground" Value="#4F7258"/>
+      <Setter Property="Background" Value="#E2EBE4"/>
+      <Setter Property="BorderBrush" Value="#C3D2C5"/>
+    </Style>
+    <Style Selector="Button.completed-check:pointerover">
+      <Setter Property="Foreground" Value="#4F7258"/>
+      <Setter Property="Background" Value="#E2EBE4"/>
+      <Setter Property="BorderBrush" Value="#C3D2C5"/>
     </Style>
 
     <Style Selector="Button.restore">
       <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="Background" Value="#E8F5EC"/>
-      <Setter Property="Foreground" Value="#166534"/>
-      <Setter Property="BorderBrush" Value="#BBF7D0"/>
+      <Setter Property="Background" Value="#E2EBE4"/>
+      <Setter Property="Foreground" Value="#4F7258"/>
+      <Setter Property="BorderBrush" Value="#C3D2C5"/>
     </Style>
 
     <Style Selector="Button.restore:pointerover">
-      <Setter Property="Background" Value="#DCFCE7"/>
-      <Setter Property="Foreground" Value="#14532D"/>
+      <Setter Property="Background" Value="#E2EBE4"/>
+      <Setter Property="Foreground" Value="#4F7258"/>
+      <Setter Property="BorderBrush" Value="#C3D2C5"/>
     </Style>
 
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="#FFFFFF"/>
-      <Setter Property="BorderBrush" Value="#E5E7EB"/>
+      <Setter Property="Background" Value="#F2F3F4"/>
+      <Setter Property="BorderBrush" Value="#D5D8DC"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="10"/>
     </Style>
 
     <Style Selector="Border.task-row:pointerover">
       <Setter Property="BorderBrush" Value="#D7D9E8"/>
-      <Setter Property="Background" Value="#FAFAFC"/>
+      <Setter Property="Background" Value="#ECEDEF"/>
     </Style>
 
     <Style Selector="Border.stat">
