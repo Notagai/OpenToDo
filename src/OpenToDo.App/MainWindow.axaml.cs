@@ -121,7 +121,7 @@ public partial class MainWindow : Window
         if (_mutationInProgress)
             return;
 
-        var editor = new TaskEditorWindow(new TaskItem(Guid.NewGuid().ToString("N"), string.Empty));
+        var editor = new TaskEditorWindow(new TaskItem(Guid.NewGuid().ToString("N"), string.Empty), true);
         var result = await editor.ShowDialog<TaskItem?>(this);
 
         if (result is null)
