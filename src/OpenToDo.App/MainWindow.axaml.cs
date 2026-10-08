@@ -175,6 +175,7 @@ public partial class MainWindow : Window
         ModelComboBox.ItemsSource = string.IsNullOrWhiteSpace(model) ? Array.Empty<string>() : new[] { model };
         ModelComboBox.SelectedItem = string.IsNullOrWhiteSpace(model) ? null : model;
         TemperatureBox.Value = (decimal)_aiSettings.Temperature;
+        TemperatureBox.IsEnabled = provider != AiProvider.OpenAI;
         MaxOutputTokensBox.Value = _aiSettings.MaxOutputTokens;
         AiStatus.Text = $"Provider: {provider}. Fetch models to validate the key and load the current model catalog.";
     }
