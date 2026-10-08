@@ -26,9 +26,9 @@
               <Grid ColumnDefinitions="*,Auto,Auto">
                 <StackPanel Spacing="3">
                   <TextBlock Text="{Binding Title}" FontSize="16" />
-                  <TextBlock Text="{Binding Description}" Opacity="0.65" IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                  <TextBlock Text="{Binding Description}" Opacity="0.65" />
                 </StackPanel>
-                <Button Grid.Column="1" x:Name="CompleteButton" Content="Complete" Click="Complete_OnClick" Margin="8,0,0,0" />
+                <Button Grid.Column="1" Content="Complete / Restore" Click="ToggleCompleted_OnClick" Margin="8,0,0,0" />
                 <Button Grid.Column="2" Content="Delete" Click="Delete_OnClick" Margin="8,0,0,0" />
               </Grid>
             </Border>
