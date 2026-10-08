@@ -37,7 +37,8 @@
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
               <Border Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="Tasks completed" Classes="muted" /><TextBlock x:Name="CompletedTotal" Text="0" FontSize="34" FontWeight="Bold" /></StackPanel></Border>
               <Border Grid.Column="1" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="Today" Classes="muted" /><TextBlock x:Name="CompletedDay" Text="0" FontSize="34" FontWeight="Bold" /></StackPanel></Border>
-              <Border Grid.Column="2" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This week" Classes="muted" /><TextBlock x:Name="CompletedWeek" Text="0" FontSize="34" FontWeight="Bold" /></StackPanel></Border>
+              <Border Grid.Column="2" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This week" Classes="muted" /><TextBlock x:Name="CompletedWeek" Text="0" FontSize="34" FontWeight="Bold" />
+            <TextBlock x:Name="CompletedMonth" Text="0" /></StackPanel></Border>
               <Border Grid.Column="3" Classes="card" Padding="18"><StackPanel Spacing="5"><TextBlock Text="This year" Classes="muted" /><TextBlock x:Name="CompletedYear" Text="0" FontSize="34" FontWeight="Bold" /></StackPanel></Border>
             </Grid>
 
