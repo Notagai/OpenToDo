@@ -189,7 +189,18 @@
     </Style>
     <Style Selector="Border.task-row.dragging">
       <Setter Property="Background" Value="#292E39"/>
-      <Setter Property="BorderBrush" Value="#66708C"/>
+      <Setter Property="BorderBrush" Value="#7188C8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BoxShadow" Value="0 5 18 #55000000"/>
+      <Setter Property="ZIndex" Value="5"/>
+    </Style>
+    <Style Selector="Border.task-row.deleting">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.22" Easing="CubicEaseIn"/>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.22" Easing="CubicEaseIn"/>
+        </Transitions>
+      </Setter>
     </Style>
     <Style Selector="Border.task-row">
       <Setter Property="Transitions">
