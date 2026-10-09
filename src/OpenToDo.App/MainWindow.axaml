@@ -34,8 +34,8 @@
           <TextBlock Text="Ask for summaries, new tasks, completions, or a new order." Classes="muted" TextWrapping="Wrap"/>
         </StackPanel>
         <Border Grid.Row="1" Background="#22252B" CornerRadius="8" Padding="10"><TextBlock Text="AI can read and update your local task list. Review the response and use clear instructions for changes." FontSize="12" Foreground="#B9BEC7" TextWrapping="Wrap"/></Border>
-        <TextBox Grid.Row="2" x:Name="AiChatHistory" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" Background="#1B1D22" BorderThickness="0" Text="AI is ready when a provider and model are configured in Settings."/>
-        <TextBox Grid.Row="3" x:Name="AiChatInput" AcceptsReturn="True" MinHeight="86" MaxHeight="150" TextWrapping="Wrap" VerticalContentAlignment="Top" Watermark="Try: Add a task to call the dentist, or sort my tasks by urgency."/>
+        <TextBox Grid.Row="2" x:Name="AiChatHistory" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" Background="#1B1D22" BorderThickness="0" Text="AI is ready when a provider and model are configured in Settings."/>
+        <TextBox Grid.Row="3" x:Name="AiChatInput" AcceptsReturn="True" MinHeight="86" MaxHeight="150" TextWrapping="Wrap" VerticalContentAlignment="Top" PlaceholderText="Try: Add a task to call the dentist, or sort my tasks by urgency."/>
         <StackPanel Grid.Row="4" Spacing="8"><Button Classes="primary" Content="Send to AI" Click="SendAi_OnClick" HorizontalAlignment="Stretch" MinHeight="42"/><Button Content="Open AI settings" Click="Settings_OnClick" HorizontalAlignment="Stretch"/><TextBlock x:Name="AiChatStatus" Text="Configure a provider in Settings to start." Classes="muted" FontSize="11" TextWrapping="Wrap"/></StackPanel>
       </Grid>
     </Border>
