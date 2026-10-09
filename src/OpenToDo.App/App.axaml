@@ -28,7 +28,12 @@
 
     <Style Selector="TextBox:pointerover, ComboBox:pointerover, NumericUpDown:pointerover">
       <Setter Property="Background" Value="#272A30"/>
-      <Setter Property="BorderBrush" Value="#444953"/>
+      <Setter Property="BorderBrush" Value="#3D4149"/>
+    </Style>
+
+    <Style Selector="TextBox.invalid, ComboBox.invalid, NumericUpDown.invalid">
+      <Setter Property="BorderBrush" Value="#D85C65"/>
+      <Setter Property="BorderThickness" Value="1.5"/>
     </Style>
 
     <Style Selector="TextBox:focus, ComboBox:focus, NumericUpDown:focus">
@@ -207,10 +212,15 @@
     <Style Selector="TextBox">
       <Setter Property="Transitions">
         <Transitions>
-          <BrushTransition Property="BorderBrush" Duration="0:0:0.16"/>
-          <BrushTransition Property="Background" Duration="0:0:0.16"/>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.24"/>
         </Transitions>
       </Setter>
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.18"/><BrushTransition Property="BorderBrush" Duration="0:0:0.18"/></Transitions></Setter>
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Transitions"><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.18"/></Transitions></Setter>
     </Style>
   </Application.Styles>
 </Application>
