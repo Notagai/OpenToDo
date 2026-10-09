@@ -560,7 +560,7 @@ Latest user request:
             }
         };
         ChatMessages.Children.Add(bubble);
-        ChatScroll.ScrollToEnd();
+        ChatScroll.Offset = new Avalonia.Vector(ChatScroll.Offset.X, ChatScroll.Extent.Height);
     }
 
     private void TaskDrag_OnPointerPressed(object? sender, PointerPressedEventArgs e)
