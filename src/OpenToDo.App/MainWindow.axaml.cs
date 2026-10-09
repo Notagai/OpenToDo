@@ -248,8 +248,15 @@ public partial class MainWindow : Window
 
     private async void Delete_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task })
+        if (_mutationInProgress || sender is not Button button || button.DataContext is not TaskItem task)
             return;
+
+        if (!string.Equals(button.Content?.ToString(), "Are you sure?", StringComparison.Ordinal))
+        {
+            button.Content = "Are you sure?";
+            button.MinWidth = 104;
+            return;
+        }
 
         await RunMutationAsync(async () =>
         {
@@ -557,31 +564,24 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
 
     private void TaskDrag_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not Button { DataContext: TaskItem task } handle || e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed == false)
+        if (sender is not Button { DataContext: TaskItem task } handle ||
+            !e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed)
             return;
 
         _draggedTask = task;
         _dragStartY = e.GetPosition(TodoList).Y;
         handle.Classes.Set("dragging", true);
-        handle.RenderTransform = new ScaleTransform(1.16, 1.16);
         handle.Opacity = 0.75;
-        if (handle.Parent is Grid grid && grid.Parent is Border row)
-        {
-            row.Classes.Set("dragging", true);
-            row.RenderTransform = new ScaleTransform(1.015, 1.015);
-            row.Opacity = 0.9;
-        }
-        e.Pointer.Capture(handle);
         e.Handled = true;
+        e.Pointer.Capture(handle);
     }
 
     private void TaskDrag_OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_draggedTask is null || sender is not Button handle)
+        if (_draggedTask is null || sender is not Button)
             return;
 
-        // The lifted handle scales and fades slightly while held; the row moves on release.
-        handle.RenderTransform = new ScaleTransform(1.16, 1.16);
+        // Keep the drag gesture captured by the grip until release.
         e.Handled = true;
     }
 
@@ -595,18 +595,15 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
         _draggedTask = null;
         e.Pointer.Capture(null);
         handle.Classes.Set("dragging", false);
-        handle.RenderTransform = new ScaleTransform(1, 1);
         handle.Opacity = 1;
-        if (handle.Parent is Grid grid && grid.Parent is Border row)
-        {
-            row.Classes.Set("dragging", false);
-            row.RenderTransform = new ScaleTransform(1, 1);
-            row.Opacity = 1;
-        }
+        e.Handled = true;
 
-        var offset = (int)Math.Round(delta / 54.0, MidpointRounding.AwayFromZero);
-        if (offset == 0) return;
-        await ReorderTaskByOffsetAsync(task, offset);
+        // Lower threshold makes short drags register on compact task rows.
+        var offset = (int)Math.Round(delta / 44.0, MidpointRounding.AwayFromZero);
+        if (offset == 0 && Math.Abs(delta) >= 18)
+            offset = Math.Sign(delta);
+        if (offset != 0)
+            await ReorderTaskByOffsetAsync(task, offset);
     }
 
     private async Task ReorderTaskByOffsetAsync(TaskItem task, int offset)
