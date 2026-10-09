@@ -10,6 +10,8 @@ public partial class MainWindow : Window
 {
     private readonly JsonTaskRepository _repository = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenToDo", "tasks"));
     private readonly AiSettingsStore _settingsStore = new();
+    private readonly string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenToDo", "config.json");
+    private string _username = string.Empty;
     private readonly AiClient _aiClient = new();
     private readonly List<TaskItem> _tasks = [];
     private AiSettings _aiSettings = new();
@@ -23,6 +25,7 @@ public partial class MainWindow : Window
         {
             try
             {
+                await LoadProfileAsync();
                 _aiSettings = await _settingsStore.LoadAsync();
                 LoadProviderSettings();
                 await LoadTasksAsync();
@@ -32,6 +35,56 @@ public partial class MainWindow : Window
                 AiStatus.Text = $"Startup warning: {ex.Message}";
             }
         };
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        if (!File.Exists(_configPath))
+        {
+            MainContent.IsVisible = false;
+            SetupPanel.IsVisible = true;
+            return;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(_configPath));
+            if (document.RootElement.TryGetProperty("username", out var name))
+                _username = name.GetString()?.Trim() ?? string.Empty;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _username = string.Empty;
+        }
+
+        var hasProfile = !string.IsNullOrWhiteSpace(_username);
+        MainContent.IsVisible = hasProfile;
+        SetupPanel.IsVisible = !hasProfile;
+        if (hasProfile)
+            UsernameBox.Text = _username;
+    }
+
+    private async void SaveProfile_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _username = UsernameBox.Text?.Trim() ?? string.Empty;
+        UsernameBox.Classes.Set("invalid", string.IsNullOrWhiteSpace(_username));
+        UsernameError.IsVisible = string.IsNullOrWhiteSpace(_username);
+        if (string.IsNullOrWhiteSpace(_username))
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
+            await File.WriteAllTextAsync(_configPath, System.Text.Json.JsonSerializer.Serialize(new { username = _username }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            SetupPanel.IsVisible = false;
+            MainContent.IsVisible = true;
+            RefreshTaskList();
+        }
+        catch (Exception ex)
+        {
+            UsernameError.Text = $"Couldn't save your profile: {ex.Message}";
+            UsernameError.IsVisible = true;
+        }
     }
 
     private async Task LoadTasksAsync()
@@ -56,7 +109,7 @@ public partial class MainWindow : Window
             "todo" => "Tasks that still need doing.",
             "completed" => "Completed tasks, kept as an archive.",
             "settings" => "AI providers and application configuration.",
-            _ => "Your productivity overview."
+            _ => string.IsNullOrWhiteSpace(_username) ? "Your productivity overview." : $"Welcome back, {_username}."
         };
 
         HomePanel.IsVisible = _currentView == "home";
