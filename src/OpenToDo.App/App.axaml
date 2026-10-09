@@ -187,6 +187,35 @@
       <Setter Property="Background" Value="#202329"/>
       <Setter Property="BorderBrush" Value="#3A3E46"/>
     </Style>
+    <Style Selector="Border.task-row.dragging">
+      <Setter Property="Background" Value="#292E39"/>
+      <Setter Property="BorderBrush" Value="#66708C"/>
+    </Style>
+    <Style Selector="Border.task-row">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14"/>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.14"/>
+          <BrushTransition Property="Background" Duration="0:0:0.14"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ListBoxItem:selected:pointerover">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
     <Style Selector="Button.drag-handle">
       <Setter Property="Width" Value="26"/>
       <Setter Property="MinHeight" Value="34"/>
