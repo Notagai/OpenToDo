@@ -182,7 +182,8 @@ public partial class MainWindow : Window
 
         await RunMutationAsync(async () =>
         {
-            await _repository.SaveAsync(result);
+            var nextOrder = _tasks.Where(t => !t.IsCompleted).Select(t => t.SortOrder).DefaultIfEmpty(-1).Max() + 1;
+            await _repository.SaveAsync(result with { SortOrder = nextOrder });
             _currentView = "todo";
             await LoadTasksAsync();
         });
@@ -486,9 +487,13 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
             var actionCount = 0;
             if (root.TryGetProperty("actions", out var actions) && actions.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
-                foreach (var action in actions.EnumerateArray()) { await ApplyAiActionAsync(action); actionCount++; }
+                foreach (var action in actions.EnumerateArray())
+                {
+                    await ApplyAiActionAsync(action);
+                    await LoadTasksAsync();
+                    actionCount++;
+                }
             }
-            if (actionCount > 0) await LoadTasksAsync();
             AiChatStatus.Text = actionCount == 0 ? $"Response received from {provider}." : $"Applied {actionCount} task action(s).";
         }
         catch (Exception ex)
