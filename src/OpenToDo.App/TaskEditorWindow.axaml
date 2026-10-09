@@ -1,15 +1,23 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenToDo.App.TaskEditorWindow" Width="560" Height="520" MinWidth="480" MinHeight="440" Title="Edit task" WindowStartupLocation="CenterOwner">
-  <Border Background="#181A1F" Padding="26">
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,* ,Auto" RowSpacing="12">
-      <TextBlock Text="Task details" FontSize="24" FontWeight="Bold" Foreground="#ECEEF1"/>
-      <TextBlock Grid.Row="1" Text="Title" Foreground="#B9BEC7" FontSize="12" FontWeight="SemiBold"/>
-      <TextBox Grid.Row="2" x:Name="TitleBox" PlaceholderText="Task title"/>
-      <TextBlock Grid.Row="3" Text="Description" Foreground="#374151" FontSize="12" FontWeight="SemiBold"/>
-      <TextBox Grid.Row="4" x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" Height="130" PlaceholderText="Optional notes"/>
-      <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-        <TextBox x:Name="DueDateBox" PlaceholderText="Due date (YYYY-MM-DD)" VerticalAlignment="Center"/>
-        <Button Grid.Column="1" Content="Cancel" Click="Cancel_OnClick"/>
-        <Button Grid.Column="2" Classes="primary" Content="Save changes" Click="Save_OnClick"/>
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OpenToDo.App.TaskEditorWindow" Width="600" Height="610" MinWidth="500" MinHeight="520" Title="Make event" WindowStartupLocation="CenterOwner">
+  <Border Background="#181A1F" Padding="30">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" RowSpacing="10">
+      <StackPanel Spacing="6">
+        <TextBlock Text="✦  EVENT PLANNER" Foreground="#AAB4D0" FontSize="11" FontWeight="Bold" LetterSpacing="1.5"/>
+        <TextBlock Text="Make event" FontSize="29" FontWeight="Bold" Foreground="#F3F4F6"/>
+        <TextBlock Text="Give it a name, add a few details, and set a date if you need one." Classes="muted" TextWrapping="Wrap"/>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="EVENT NAME *" Foreground="#B9BEC7" FontSize="11" FontWeight="SemiBold" Margin="0,12,0,0"/>
+      <TextBox Grid.Row="2" x:Name="TitleBox" PlaceholderText="e.g. Plan weekend trip" MinHeight="42"/>
+      <TextBlock Grid.Row="3" Text="NOTES  ·  OPTIONAL" Foreground="#B9BEC7" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,0"/>
+      <TextBox Grid.Row="4" x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" Height="145" PlaceholderText="Add a little context, a checklist, or anything to remember…"/>
+      <StackPanel Grid.Row="5" Spacing="8" Margin="0,8,0,0">
+        <TextBlock Text="DUE DATE  ·  OPTIONAL" Foreground="#B9BEC7" FontSize="11" FontWeight="SemiBold"/>
+        <TextBox x:Name="DueDateBox" PlaceholderText="YYYY-MM-DD  (e.g. 2026-10-31)" MinHeight="42"/>
+        <TextBlock Text="Leave the date blank if this event has no deadline." Classes="muted" FontSize="12" TextWrapping="Wrap"/>
+      </StackPanel>
+      <Grid Grid.Row="6" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,18,0,0">
+        <Button Content="Cancel" Click="Cancel_OnClick" MinWidth="90"/>
+        <Button Grid.Column="1" Classes="primary" Content="✓  Save event" Click="Save_OnClick" MinWidth="130"/>
       </Grid>
     </Grid>
   </Border>
