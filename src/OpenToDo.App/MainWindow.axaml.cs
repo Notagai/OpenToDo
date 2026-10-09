@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using OpenToDo.Core;
 using OpenToDo.Data;
 using OpenToDo.Plugins.Ai;
@@ -22,6 +23,8 @@ public partial class MainWindow : Window
     private string _chatTranscript = string.Empty;
     private TaskItem? _draggedTask;
     private double _dragStartY;
+    private int _dragTargetIndex = -1;
+    private Border? _draggedRow;
 
     public MainWindow()
     {
@@ -256,6 +259,16 @@ public partial class MainWindow : Window
             button.Content = "Are you sure?";
             button.MinWidth = 104;
             return;
+        }
+
+        var row = button.GetVisualAncestors().OfType<Border>()
+            .FirstOrDefault(candidate => candidate.Classes.Contains("task-row"));
+        if (row is not null)
+        {
+            row.Classes.Set("deleting", true);
+            row.RenderTransform = new TranslateTransform(520, 0);
+            row.Opacity = 0;
+            await Task.Delay(240);
         }
 
         await RunMutationAsync(async () =>
@@ -564,24 +577,39 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
 
     private void TaskDrag_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not Button { DataContext: TaskItem task } handle ||
+        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task } handle ||
             !e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed)
             return;
 
         _draggedTask = task;
         _dragStartY = e.GetPosition(TodoList).Y;
+        _dragTargetIndex = -1;
+        _draggedRow = handle.GetVisualAncestors().OfType<Border>()
+            .FirstOrDefault(candidate => candidate.Classes.Contains("task-row"));
+        if (_draggedRow is not null)
+        {
+            _draggedRow.Classes.Set("dragging", true);
+            _draggedRow.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            _draggedRow.RenderTransform = new ScaleTransform(1.025, 1.025);
+            _draggedRow.Opacity = 0.88;
+        }
         handle.Classes.Set("dragging", true);
-        handle.Opacity = 0.75;
-        e.Handled = true;
         e.Pointer.Capture(handle);
+        e.Handled = true;
+        UpdateDropIndicator(_dragStartY);
     }
 
     private void TaskDrag_OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_draggedTask is null || sender is not Button)
+        if (_draggedTask is null || sender is not Button handle)
             return;
 
-        // Keep the drag gesture captured by the grip until release.
+        var y = e.GetPosition(TodoList).Y;
+        UpdateDropIndicator(y);
+        // A picked-up row follows the pointer slightly, while the blue insertion line
+        // previews the exact slot that will receive the task on release.
+        if (_draggedRow is not null)
+            _draggedRow.RenderTransform = new TranslateTransform(0, Math.Clamp(y - _dragStartY, -80, 80) * 0.18);
         e.Handled = true;
     }
 
@@ -591,19 +619,98 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
             return;
 
         var task = _draggedTask;
-        var delta = e.GetPosition(TodoList).Y - _dragStartY;
+        var targetIndex = _dragTargetIndex;
         _draggedTask = null;
+        _dragTargetIndex = -1;
         e.Pointer.Capture(null);
         handle.Classes.Set("dragging", false);
         handle.Opacity = 1;
+        if (_draggedRow is not null)
+        {
+            _draggedRow.Classes.Set("dragging", false);
+            _draggedRow.RenderTransform = new TranslateTransform(0, 0);
+            _draggedRow.Opacity = 1;
+            _draggedRow = null;
+        }
+        ClearDropIndicators();
         e.Handled = true;
 
-        // Lower threshold makes short drags register on compact task rows.
-        var offset = (int)Math.Round(delta / 44.0, MidpointRounding.AwayFromZero);
-        if (offset == 0 && Math.Abs(delta) >= 18)
-            offset = Math.Sign(delta);
-        if (offset != 0)
-            await ReorderTaskByOffsetAsync(task, offset);
+        if (targetIndex >= 0)
+            await ReorderTaskToIndexAsync(task, targetIndex);
+    }
+
+    private void UpdateDropIndicator(double pointerY)
+    {
+        var rows = TodoList.GetVisualDescendants().OfType<Border>()
+            .Where(row => row.Classes.Contains("task-row") && row.DataContext is TaskItem)
+            .OrderBy(row => row.TranslatePoint(new Point(0, 0), TodoList)?.Y ?? double.MaxValue)
+            .ToList();
+        ClearDropIndicators();
+        if (rows.Count == 0)
+        {
+            _dragTargetIndex = -1;
+            return;
+        }
+
+        var draggedIndex = rows.FindIndex(row => row.DataContext is TaskItem item && item.Id == _draggedTask?.Id);
+        var targetIndex = rows.Count;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var top = rows[i].TranslatePoint(new Point(0, 0), TodoList)?.Y ?? 0;
+            var middle = top + rows[i].Bounds.Height / 2;
+            if (pointerY < middle)
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        // Convert the insertion slot to the final index after removing the dragged item.
+        if (draggedIndex >= 0 && targetIndex > draggedIndex)
+            targetIndex--;
+        _dragTargetIndex = Math.Clamp(targetIndex, 0, Math.Max(0, rows.Count - 1));
+
+        var indicatorIndex = targetIndex >= rows.Count ? rows.Count - 1 : targetIndex;
+        var indicator = rows[indicatorIndex].GetVisualDescendants().OfType<Border>()
+            .FirstOrDefault(candidate => candidate.Name == "DropIndicator");
+        if (indicator is not null)
+        {
+            indicator.VerticalAlignment = targetIndex >= rows.Count
+                ? Avalonia.Layout.VerticalAlignment.Bottom
+                : Avalonia.Layout.VerticalAlignment.Top;
+            indicator.IsVisible = true;
+        }
+    }
+
+    private void ClearDropIndicators()
+    {
+        foreach (var indicator in TodoList.GetVisualDescendants().OfType<Border>()
+                     .Where(candidate => candidate.Name == "DropIndicator"))
+            indicator.IsVisible = false;
+    }
+
+    private async Task ReorderTaskToIndexAsync(TaskItem task, int targetIndex)
+    {
+        var active = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList();
+        var currentIndex = active.FindIndex(item => item.Id == task.Id);
+        if (currentIndex < 0 || active.Count < 2)
+            return;
+        targetIndex = Math.Clamp(targetIndex, 0, active.Count - 1);
+        if (targetIndex == currentIndex)
+        {
+            await LoadTasksAsync();
+            return;
+        }
+
+        active.RemoveAt(currentIndex);
+        active.Insert(targetIndex, task);
+        await RunMutationAsync(async () =>
+        {
+            for (var i = 0; i < active.Count; i++)
+                await _repository.SaveAsync(active[i] with { SortOrder = i });
+            await LoadTasksAsync();
+        });
     }
 
     private async Task ReorderTaskByOffsetAsync(TaskItem task, int offset)
