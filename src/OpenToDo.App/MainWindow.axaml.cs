@@ -534,8 +534,9 @@ Latest user request:
         var bubble = new Border
         {
             MaxWidth = 255,
+            Margin = new Avalonia.Thickness(isUser ? 12 : 0, 0, isUser ? 0 : 12, 0),
             HorizontalAlignment = isUser ? Avalonia.Layout.HorizontalAlignment.Right : Avalonia.Layout.HorizontalAlignment.Left,
-            Background = new SolidColorBrush(isUser ? Color.Parse("#46516B") : speaker == "System" ? Color.Parse("#3A2B2D") : Color.Parse("#252932")),
+            Background = new SolidColorBrush(isUser ? Color.Parse("#46516B") : Color.Parse("#252932")),
             CornerRadius = new Avalonia.CornerRadius(12),
             Padding = new Avalonia.Thickness(12, 9)
         };
@@ -546,7 +547,7 @@ Latest user request:
             {
                 new TextBlock
                 {
-                    Text = speaker == "You" ? "YOU" : speaker.ToUpperInvariant(),
+                    Text = speaker == "You" ? "You" : speaker == "System" ? "Notice" : "OpenToDo",
                     FontSize = 10,
                     FontWeight = Avalonia.Media.FontWeight.Bold,
                     Foreground = new SolidColorBrush(Color.Parse(isUser ? "#DDE3F4" : "#AAB4D0"))
@@ -573,6 +574,12 @@ Latest user request:
         handle.Classes.Set("dragging", true);
         handle.RenderTransform = new ScaleTransform(1.16, 1.16);
         handle.Opacity = 0.75;
+        if (handle.Parent is Grid grid && grid.Parent is Border row)
+        {
+            row.Classes.Set("dragging", true);
+            row.RenderTransform = new ScaleTransform(1.015, 1.015);
+            row.Opacity = 0.9;
+        }
         e.Pointer.Capture(handle);
         e.Handled = true;
     }
@@ -599,6 +606,12 @@ Latest user request:
         handle.Classes.Set("dragging", false);
         handle.RenderTransform = new ScaleTransform(1, 1);
         handle.Opacity = 1;
+        if (handle.Parent is Grid grid && grid.Parent is Border row)
+        {
+            row.Classes.Set("dragging", false);
+            row.RenderTransform = new ScaleTransform(1, 1);
+            row.Opacity = 1;
+        }
 
         var offset = (int)Math.Round(delta / 54.0, MidpointRounding.AwayFromZero);
         if (offset == 0) return;
