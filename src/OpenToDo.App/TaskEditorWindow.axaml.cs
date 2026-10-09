@@ -57,7 +57,7 @@ public partial class TaskEditorWindow : Window
         TitleBox.Classes.Set("invalid", false);
         Result = _original with
         {
-            Title = title,
+            Title = title!,
             Description = string.IsNullOrWhiteSpace(DescriptionBox.Text) ? null : DescriptionBox.Text.Trim(),
             DueDate = dueDate
         };
