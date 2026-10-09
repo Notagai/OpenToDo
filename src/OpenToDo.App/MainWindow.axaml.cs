@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
+using Avalonia.Interactivity;\nusing Avalonia.Input;\nusing Avalonia.Media;
 using OpenToDo.Core;
 using OpenToDo.Data;
 using OpenToDo.Plugins.Ai;
@@ -16,7 +16,7 @@ public partial class MainWindow : Window
     private readonly List<TaskItem> _tasks = [];
     private AiSettings _aiSettings = new();
     private string _currentView = "home";
-    private bool _mutationInProgress;
+    private bool _mutationInProgress;\n    private string _chatTranscript = string.Empty;\n    private TaskItem? _draggedTask;\n    private double _dragStartY;
 
     public MainWindow()
     {
@@ -476,7 +476,7 @@ For reorder, include all active task IDs in the requested order. Do not delete t
 Only perform actions the user clearly requested. If the intent is ambiguous, ask a question in message and return no actions.
 """;
             var prompt = systemPrompt + "\n\nCurrent task list JSON:\n" + System.Text.Json.JsonSerializer.Serialize(taskSnapshot) +
-                         "\n\nConversation so far:\n" + (AiChatHistory.Text ?? string.Empty) +
+                         "\n\nConversation so far:\n" + _chatTranscript +
                          "\n\nLatest user request:\n" + userMessage;
             var raw = await _aiClient.GenerateAsync(provider, apiKey, model, prompt, _aiSettings.Temperature, _aiSettings.MaxOutputTokens);
             using var document = System.Text.Json.JsonDocument.Parse(ExtractJsonObject(raw));
@@ -512,9 +512,102 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
 
     private void AppendChat(string speaker, string message)
     {
-        var existing = AiChatHistory.Text ?? string.Empty;
-        AiChatHistory.Text = string.IsNullOrWhiteSpace(existing) ? $"{speaker}: {message}" :
-            existing + Environment.NewLine + Environment.NewLine + $"{speaker}: {message}";
+        _chatTranscript = string.IsNullOrWhiteSpace(_chatTranscript)
+            ? $"{speaker}: {message}"
+            : _chatTranscript + Environment.NewLine + Environment.NewLine + $"{speaker}: {message}";
+
+        var isUser = string.Equals(speaker, "You", StringComparison.Ordinal);
+        var bubble = new Border
+        {
+            MaxWidth = 255,
+            HorizontalAlignment = isUser ? Avalonia.Layout.HorizontalAlignment.Right : Avalonia.Layout.HorizontalAlignment.Left,
+            Background = new SolidColorBrush(isUser ? Color.Parse("#46516B") : speaker == "System" ? Color.Parse("#3A2B2D") : Color.Parse("#252932")),
+            CornerRadius = new Avalonia.CornerRadius(12),
+            Padding = new Avalonia.Thickness(12, 9)
+        };
+        bubble.Child = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = speaker == "You" ? "YOU" : speaker.ToUpperInvariant(),
+                    FontSize = 10,
+                    FontWeight = Avalonia.Media.FontWeight.Bold,
+                    Foreground = new SolidColorBrush(Color.Parse(isUser ? "#DDE3F4" : "#AAB4D0"))
+                },
+                new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Color.Parse("#ECEEF1"))
+                }
+            }
+        };
+        ChatMessages.Children.Add(bubble);
+        ChatScroll.ScrollToEnd();
+    }
+
+    private void TaskDrag_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Button { DataContext: TaskItem task } handle || e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed == false)
+            return;
+
+        _draggedTask = task;
+        _dragStartY = e.GetPosition(TodoList).Y;
+        handle.Classes.Set("dragging", true);
+        handle.RenderTransform = new ScaleTransform(1.16, 1.16);
+        handle.Opacity = 0.75;
+        e.Pointer.Capture(handle);
+        e.Handled = true;
+    }
+
+    private void TaskDrag_OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_draggedTask is null || sender is not Button handle)
+            return;
+
+        // The lifted handle scales and fades slightly while held; the row moves on release.
+        handle.RenderTransform = new ScaleTransform(1.16, 1.16);
+        e.Handled = true;
+    }
+
+    private async void TaskDrag_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_draggedTask is null || sender is not Button handle)
+            return;
+
+        var task = _draggedTask;
+        var delta = e.GetPosition(TodoList).Y - _dragStartY;
+        _draggedTask = null;
+        e.Pointer.Capture(null);
+        handle.Classes.Set("dragging", false);
+        handle.RenderTransform = new ScaleTransform(1, 1);
+        handle.Opacity = 1;
+
+        var offset = (int)Math.Round(delta / 54.0, MidpointRounding.AwayFromZero);
+        if (offset == 0) return;
+        await ReorderTaskByOffsetAsync(task, offset);
+    }
+
+    private async Task ReorderTaskByOffsetAsync(TaskItem task, int offset)
+    {
+        if (_mutationInProgress) return;
+        var active = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList();
+        var index = active.FindIndex(t => t.Id == task.Id);
+        if (index < 0) return;
+        var target = Math.Clamp(index + offset, 0, active.Count - 1);
+        if (target == index) return;
+        active.RemoveAt(index);
+        active.Insert(target, task);
+        await RunMutationAsync(async () =>
+        {
+            for (var i = 0; i < active.Count; i++)
+                await _repository.SaveAsync(active[i] with { SortOrder = i });
+            await LoadTasksAsync();
+        });
     }
 
     private static string ExtractJsonObject(string response)
