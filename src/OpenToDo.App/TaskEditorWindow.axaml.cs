@@ -34,6 +34,7 @@ public partial class TaskEditorWindow : Window
         DateTimeOffset? dueDate = null;
         var dueText = DueDateBox.Text?.Trim();
 
+        DueDateBox.Classes.Set("invalid", false);
         if (!string.IsNullOrWhiteSpace(dueText))
         {
             if (!DateTime.TryParseExact(
