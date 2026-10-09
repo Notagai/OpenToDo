@@ -23,8 +23,13 @@ public partial class TaskEditorWindow : Window
     private void Save_OnClick(object? sender, RoutedEventArgs e)
     {
         var title = TitleBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(title))
+        var titleInvalid = string.IsNullOrWhiteSpace(title);
+        TitleBox.Classes.Set("invalid", titleInvalid);
+        if (titleInvalid)
+        {
+            TitleBox.Focus();
             return;
+        }
 
         DateTimeOffset? dueDate = null;
         var dueText = DueDateBox.Text?.Trim();
@@ -37,11 +42,18 @@ public partial class TaskEditorWindow : Window
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
                     out var parsed))
+            {
+                DueDateBox.Classes.Set("invalid", true);
+                DueDateBox.Focus();
                 return;
+            }
+
+            DueDateBox.Classes.Set("invalid", false);
 
             dueDate = new DateTimeOffset(parsed.Date, TimeZoneInfo.Local.GetUtcOffset(parsed.Date));
         }
 
+        TitleBox.Classes.Set("invalid", false);
         Result = _original with
         {
             Title = title,
