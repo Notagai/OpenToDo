@@ -1,5 +1,7 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;\nusing Avalonia.Input;\nusing Avalonia.Media;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using OpenToDo.Core;
 using OpenToDo.Data;
 using OpenToDo.Plugins.Ai;
@@ -16,7 +18,10 @@ public partial class MainWindow : Window
     private readonly List<TaskItem> _tasks = [];
     private AiSettings _aiSettings = new();
     private string _currentView = "home";
-    private bool _mutationInProgress;\n    private string _chatTranscript = string.Empty;\n    private TaskItem? _draggedTask;\n    private double _dragStartY;
+    private bool _mutationInProgress;
+    private string _chatTranscript = string.Empty;
+    private TaskItem? _draggedTask;
+    private double _dragStartY;
 
     public MainWindow()
     {
@@ -475,9 +480,18 @@ Never invent task IDs. For update/complete/reorder, use IDs from the supplied ta
 For reorder, include all active task IDs in the requested order. Do not delete tasks.
 Only perform actions the user clearly requested. If the intent is ambiguous, ask a question in message and return no actions.
 """;
-            var prompt = systemPrompt + "\n\nCurrent task list JSON:\n" + System.Text.Json.JsonSerializer.Serialize(taskSnapshot) +
-                         "\n\nConversation so far:\n" + _chatTranscript +
-                         "\n\nLatest user request:\n" + userMessage;
+            var prompt = systemPrompt + "
+
+Current task list JSON:
+" + System.Text.Json.JsonSerializer.Serialize(taskSnapshot) +
+                         "
+
+Conversation so far:
+" + _chatTranscript +
+                         "
+
+Latest user request:
+" + userMessage;
             var raw = await _aiClient.GenerateAsync(provider, apiKey, model, prompt, _aiSettings.Temperature, _aiSettings.MaxOutputTokens);
             using var document = System.Text.Json.JsonDocument.Parse(ExtractJsonObject(raw));
             var root = document.RootElement;
