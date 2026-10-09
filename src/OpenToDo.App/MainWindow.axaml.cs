@@ -117,9 +117,9 @@ public partial class MainWindow : Window
         CompletedPanel.IsVisible = _currentView == "completed";
         SettingsPanel.IsVisible = _currentView == "settings";
 
-        TodoList.ItemsSource = _tasks.Where(t => !t.IsCompleted).ToArray();
+        TodoList.ItemsSource = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder).ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToArray();
         CompletedList.ItemsSource = _tasks.Where(t => t.IsCompleted).ToArray();
-        TaskList.ItemsSource = _tasks.Where(t => !t.IsCompleted).Take(5).ToArray();
+        TaskList.ItemsSource = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder).ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).Take(5).ToArray();
 
         if (_currentView == "home")
             RefreshAnalytics();
@@ -415,6 +415,185 @@ public partial class MainWindow : Window
             AiStatus.Text = $"AI test failed: {ex.Message}";
         }
     }
+
+
+    private async void MoveTaskUp_OnClick(object? sender, RoutedEventArgs e) =>
+        await MoveTaskAsync(sender, -1);
+
+    private async void MoveTaskDown_OnClick(object? sender, RoutedEventArgs e) =>
+        await MoveTaskAsync(sender, 1);
+
+    private async Task MoveTaskAsync(object? sender, int offset)
+    {
+        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task })
+            return;
+        var active = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList();
+        var index = active.FindIndex(t => t.Id == task.Id);
+        var target = index + offset;
+        if (index < 0 || target < 0 || target >= active.Count) return;
+        (active[index], active[target]) = (active[target], active[index]);
+        await RunMutationAsync(async () =>
+        {
+            for (var i = 0; i < active.Count; i++) await _repository.SaveAsync(active[i] with { SortOrder = i });
+            await LoadTasksAsync();
+        });
+    }
+
+    private async void SendAi_OnClick(object? sender, RoutedEventArgs e)
+    {
+        var userMessage = AiChatInput.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(userMessage)) { AiChatStatus.Text = "Enter a message first."; return; }
+        var provider = SelectedProvider;
+        var apiKey = GetStoredApiKey(provider);
+        var model = GetStoredModel(provider);
+        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(model))
+        {
+            AiChatStatus.Text = "Configure an API key and model in Settings, then save them.";
+            return;
+        }
+
+        AiChatInput.Text = string.Empty;
+        AppendChat("You", userMessage);
+        AiChatStatus.Text = $"Thinking with {provider}…";
+        try
+        {
+            var taskSnapshot = _tasks.OrderBy(t => t.IsCompleted).ThenBy(t => t.SortOrder).ThenBy(t => t.DueDate)
+                .Select(t => new { id = t.Id, title = t.Title, description = t.Description, completed = t.IsCompleted, dueDate = t.DueDate?.ToString("O"), sortOrder = t.SortOrder }).ToArray();
+            var systemPrompt = """
+You are the task assistant inside OpenToDo. The task list is supplied as JSON context.
+Respond with exactly one JSON object, no markdown, using this schema:
+{"message":"short user-facing explanation","actions":[ ... ]}
+Supported actions:
+- {"type":"add","title":"...","description":"optional","dueDate":"optional ISO-8601 date/time"}
+- {"type":"update","taskId":"existing exact id","title":"optional new title","description":"optional new description","dueDate":"optional ISO-8601 date/time"}
+- {"type":"complete","taskId":"existing exact id","completed":true}
+- {"type":"reorder","taskIds":["existing-id-1","existing-id-2"]}
+For a read-only question, use an empty actions array and answer in message.
+Never invent task IDs. For update/complete/reorder, use IDs from the supplied task list.
+For reorder, include all active task IDs in the requested order. Do not delete tasks.
+Only perform actions the user clearly requested. If the intent is ambiguous, ask a question in message and return no actions.
+""";
+            var prompt = systemPrompt + "\n\nCurrent task list JSON:\n" + System.Text.Json.JsonSerializer.Serialize(taskSnapshot) +
+                         "\n\nConversation so far:\n" + (AiChatHistory.Text ?? string.Empty) +
+                         "\n\nLatest user request:\n" + userMessage;
+            var raw = await _aiClient.GenerateAsync(provider, apiKey, model, prompt, _aiSettings.Temperature, _aiSettings.MaxOutputTokens);
+            using var document = System.Text.Json.JsonDocument.Parse(ExtractJsonObject(raw));
+            var root = document.RootElement;
+            var message = root.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == System.Text.Json.JsonValueKind.String
+                ? messageElement.GetString() ?? string.Empty : "Done.";
+            AppendChat("AI", message);
+            var actionCount = 0;
+            if (root.TryGetProperty("actions", out var actions) && actions.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var action in actions.EnumerateArray()) { await ApplyAiActionAsync(action); actionCount++; }
+            }
+            if (actionCount > 0) await LoadTasksAsync();
+            AiChatStatus.Text = actionCount == 0 ? $"Response received from {provider}." : $"Applied {actionCount} task action(s).";
+        }
+        catch (Exception ex)
+        {
+            AiChatStatus.Text = $"AI request failed: {ex.Message}";
+            AppendChat("System", "I couldn't apply that request. Check provider/model settings and try again.");
+        }
+    }
+
+    private string GetStoredApiKey(AiProvider provider) => provider switch
+    {
+        AiProvider.Groq => _aiSettings.GroqApiKey,
+        AiProvider.OpenRouter => _aiSettings.OpenRouterApiKey,
+        _ => _aiSettings.OpenAiApiKey
+    };
+
+    private void AppendChat(string speaker, string message)
+    {
+        var existing = AiChatHistory.Text ?? string.Empty;
+        AiChatHistory.Text = string.IsNullOrWhiteSpace(existing) ? $"{speaker}: {message}" :
+            existing + Environment.NewLine + Environment.NewLine + $"{speaker}: {message}";
+    }
+
+    private static string ExtractJsonObject(string response)
+    {
+        var text = response.Trim();
+        var start = text.IndexOf('{');
+        var end = text.LastIndexOf('}');
+        if (start < 0 || end <= start)
+            throw new InvalidOperationException("The AI response did not contain a valid task-action JSON object.");
+        return text[start..(end + 1)];
+    }
+
+    private async Task ApplyAiActionAsync(System.Text.Json.JsonElement action)
+    {
+        if (!action.TryGetProperty("type", out var typeElement)) return;
+        var type = typeElement.GetString();
+        string ReadString(string name) => action.TryGetProperty(name, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String
+            ? value.GetString() ?? string.Empty : string.Empty;
+
+        switch (type)
+        {
+            case "add":
+            {
+                var title = ReadString("title").Trim();
+                if (title.Length == 0 || title.Length > 300) throw new InvalidOperationException("AI task title was empty or too long.");
+                DateTimeOffset? due = null;
+                var dueText = ReadString("dueDate");
+                if (!string.IsNullOrWhiteSpace(dueText))
+                {
+                    if (!DateTimeOffset.TryParse(dueText, out var parsedDue)) throw new InvalidOperationException($"Invalid due date for task '{title}'.");
+                    due = parsedDue;
+                }
+                var nextOrder = _tasks.Where(t => !t.IsCompleted).Select(t => t.SortOrder).DefaultIfEmpty(-1).Max() + 1;
+                await _repository.SaveAsync(new TaskItem(Guid.NewGuid().ToString("N"), title, EmptyToNull(ReadString("description")), false, due, null, nextOrder));
+                break;
+            }
+            case "update":
+            {
+                var task = FindAiTask(ReadString("taskId"));
+                var title = ReadString("title");
+                var description = ReadString("description");
+                var dueText = ReadString("dueDate");
+                DateTimeOffset? due = task.DueDate;
+                if (!string.IsNullOrWhiteSpace(dueText))
+                {
+                    if (!DateTimeOffset.TryParse(dueText, out var parsedDue)) throw new InvalidOperationException("AI supplied an invalid due date.");
+                    due = parsedDue;
+                }
+                if (!string.IsNullOrWhiteSpace(title) && title.Trim().Length > 300) throw new InvalidOperationException("Task title is too long.");
+                await _repository.SaveAsync(task with { Title = string.IsNullOrWhiteSpace(title) ? task.Title : title.Trim(),
+                    Description = string.IsNullOrWhiteSpace(description) ? task.Description : EmptyToNull(description), DueDate = due });
+                break;
+            }
+            case "complete":
+            {
+                var task = FindAiTask(ReadString("taskId"));
+                var completed = action.TryGetProperty("completed", out var completedValue) && completedValue.ValueKind == System.Text.Json.JsonValueKind.True;
+                var history = (task.CompletionHistory ?? Array.Empty<DateTimeOffset>()).ToList();
+                if (completed && !task.IsCompleted) history.Add(DateTimeOffset.Now);
+                await _repository.SaveAsync(task with { IsCompleted = completed, CompletionHistory = history });
+                break;
+            }
+            case "reorder":
+            {
+                if (!action.TryGetProperty("taskIds", out var ids) || ids.ValueKind != System.Text.Json.JsonValueKind.Array)
+                    throw new InvalidOperationException("AI reorder action did not contain task IDs.");
+                var requested = ids.EnumerateArray().Where(v => v.ValueKind == System.Text.Json.JsonValueKind.String).Select(v => v.GetString() ?? string.Empty).ToList();
+                var active = _tasks.Where(t => !t.IsCompleted).ToDictionary(t => t.Id, StringComparer.Ordinal);
+                var ordered = requested.Where(active.ContainsKey).Distinct(StringComparer.Ordinal).Select(id => active[id]).ToList();
+                ordered.AddRange(_tasks.Where(t => !t.IsCompleted && !requested.Contains(t.Id, StringComparer.Ordinal)).OrderBy(t => t.SortOrder));
+                for (var i = 0; i < ordered.Count; i++) await _repository.SaveAsync(ordered[i] with { SortOrder = i });
+                break;
+            }
+        }
+    }
+
+    private TaskItem FindAiTask(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) throw new InvalidOperationException("AI task action is missing a task ID.");
+        return _tasks.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException("AI referenced a task that no longer exists. Please retry.");
+    }
+
+    private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private string GetStoredModel(AiProvider provider) => provider switch
     {
