@@ -480,18 +480,9 @@ Never invent task IDs. For update/complete/reorder, use IDs from the supplied ta
 For reorder, include all active task IDs in the requested order. Do not delete tasks.
 Only perform actions the user clearly requested. If the intent is ambiguous, ask a question in message and return no actions.
 """;
-            var prompt = systemPrompt + "
-
-Current task list JSON:
-" + System.Text.Json.JsonSerializer.Serialize(taskSnapshot) +
-                         "
-
-Conversation so far:
-" + _chatTranscript +
-                         "
-
-Latest user request:
-" + userMessage;
+            var prompt = systemPrompt + "\n\nCurrent task list JSON:\n" + System.Text.Json.JsonSerializer.Serialize(taskSnapshot) +
+                          "\n\nConversation so far:\n" + _chatTranscript +
+                          "\n\nLatest user request:\n" + userMessage;
             var raw = await _aiClient.GenerateAsync(provider, apiKey, model, prompt, _aiSettings.Temperature, _aiSettings.MaxOutputTokens);
             using var document = System.Text.Json.JsonDocument.Parse(ExtractJsonObject(raw));
             var root = document.RootElement;
