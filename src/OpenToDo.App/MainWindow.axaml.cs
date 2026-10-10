@@ -595,14 +595,14 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
             _draggedRow.Opacity = 0.88;
         }
         handle.Classes.Set("dragging", true);
-        e.Pointer.Capture(handle);
+        e.Pointer.Capture(TodoList);
         e.Handled = true;
         UpdateDropIndicator(_dragStartY);
     }
 
     private void TaskDrag_OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_draggedTask is null || sender is not Button handle)
+        if (_draggedTask is null)
             return;
 
         var y = e.GetPosition(TodoList).Y;
@@ -616,7 +616,7 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
 
     private async void TaskDrag_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_draggedTask is null || sender is not Button handle)
+        if (_draggedTask is null)
             return;
 
         var task = _draggedTask;
@@ -624,8 +624,6 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
         _draggedTask = null;
         _dragTargetIndex = -1;
         e.Pointer.Capture(null);
-        handle.Classes.Set("dragging", false);
-        handle.Opacity = 1;
         if (_draggedRow is not null)
         {
             _draggedRow.Classes.Set("dragging", false);
@@ -672,7 +670,7 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
         _dragTargetIndex = Math.Clamp(targetIndex, 0, Math.Max(0, rows.Count - 1));
 
         var indicatorIndex = targetIndex >= rows.Count ? rows.Count - 1 : targetIndex;
-        var indicator = rows[indicatorIndex].GetVisualDescendants().OfType<Border>()
+        var indicator = (rows[indicatorIndex].Parent as Grid)?.Children.OfType<Border>()
             .FirstOrDefault(candidate => candidate.Name == "DropIndicator");
         if (indicator is not null)
         {
