@@ -184,8 +184,9 @@
       <Setter Property="CornerRadius" Value="0"/>
     </Style>
     <Style Selector="Border.task-row:pointerover">
-      <Setter Property="Background" Value="#202329"/>
-      <Setter Property="BorderBrush" Value="#3A3E46"/>
+      <Setter Property="Background" Value="#303744"/>
+      <Setter Property="BorderBrush" Value="#7188C8"/>
+      <Setter Property="BorderThickness" Value="0,0,0,2"/>
     </Style>
     <Style Selector="Border.task-row.dragging">
       <Setter Property="Background" Value="#292E39"/>
@@ -241,8 +242,9 @@
       <Setter Property="Cursor" Value="SizeAll"/>
     </Style>
     <Style Selector="Button.drag-handle:pointerover">
-      <Setter Property="Foreground" Value="#C6CCDA"/>
-      <Setter Property="Background" Value="#2B2E35"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="Background" Value="#414A5B"/>
+      <Setter Property="BorderBrush" Value="#7188C8"/>
     </Style>
 
     <Style Selector="Border.stat">
