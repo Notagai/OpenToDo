@@ -28,7 +28,12 @@
 
     <Style Selector="TextBox:pointerover, ComboBox:pointerover, NumericUpDown:pointerover">
       <Setter Property="Background" Value="#272A30"/>
-      <Setter Property="BorderBrush" Value="#444953"/>
+      <Setter Property="BorderBrush" Value="#3D4149"/>
+    </Style>
+
+    <Style Selector="TextBox.invalid, ComboBox.invalid, NumericUpDown.invalid">
+      <Setter Property="BorderBrush" Value="#D85C65"/>
+      <Setter Property="BorderThickness" Value="1.5"/>
     </Style>
 
     <Style Selector="TextBox:focus, ComboBox:focus, NumericUpDown:focus">
@@ -172,9 +177,74 @@
       <Setter Property="CornerRadius" Value="10"/>
     </Style>
 
+    <Style Selector="Border.task-row">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="BorderBrush" Value="#30343C"/>
+      <Setter Property="CornerRadius" Value="0"/>
+    </Style>
     <Style Selector="Border.task-row:pointerover">
-      <Setter Property="BorderBrush" Value="#343840"/>
-      <Setter Property="Background" Value="#22252B"/>
+      <Setter Property="Background" Value="#303744"/>
+      <Setter Property="BorderBrush" Value="#7188C8"/>
+      <Setter Property="BorderThickness" Value="0,0,0,2"/>
+    </Style>
+    <Style Selector="Border.task-row.dragging">
+      <Setter Property="Background" Value="#292E39"/>
+      <Setter Property="BorderBrush" Value="#7188C8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BoxShadow" Value="0 5 18 #55000000"/>
+      <Setter Property="ZIndex" Value="5"/>
+    </Style>
+    <Style Selector="Border.task-row.deleting">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.22" Easing="CubicEaseIn"/>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.22" Easing="CubicEaseIn"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.task-row">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14"/>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.14"/>
+          <BrushTransition Property="Background" Duration="0:0:0.14"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ListBoxItem:selected:pointerover">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.drag-handle">
+      <Setter Property="Width" Value="30"/>
+      <Setter Property="Height" Value="38"/>
+      <Setter Property="MinHeight" Value="38"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="FontSize" Value="20"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Foreground" Value="#737B89"/>
+      <Setter Property="Cursor" Value="SizeAll"/>
+    </Style>
+    <Style Selector="Button.drag-handle:pointerover">
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="Background" Value="#414A5B"/>
+      <Setter Property="BorderBrush" Value="#7188C8"/>
     </Style>
 
     <Style Selector="Border.stat">
@@ -186,6 +256,36 @@
       <Setter Property="FontWeight" Value="Bold"/>
       <Setter Property="Margin" Value="0,5,0,0"/>
       <Setter Property="Foreground" Value="#ECEEF1"/>
+    </Style>
+
+    <!-- Small, consistent transitions make hover/focus feedback feel responsive without slowing actions. -->
+    <Style Selector="Button">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.16"/>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.16"/>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.nav">
+      <Setter Property="MinHeight" Value="42"/>
+      <Setter Property="Margin" Value="0,2"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Padding" Value="13,10"/>
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.24"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.18"/><BrushTransition Property="BorderBrush" Duration="0:0:0.18"/></Transitions></Setter>
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Transitions"><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.18"/></Transitions></Setter>
     </Style>
   </Application.Styles>
 </Application>

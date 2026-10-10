@@ -38,6 +38,7 @@ public sealed class JsonTaskRepository : ITaskRepository
 
         return tasks
             .OrderBy(t => t.IsCompleted)
+            .ThenBy(t => t.SortOrder)
             .ThenBy(t => t.DueDate)
             .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
             .ToArray();
