@@ -1,9 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.VisualTree;
+using Avalonia.Threading;
 using OpenToDo.Core;
 using OpenToDo.Data;
 using OpenToDo.Plugins.Ai;
@@ -12,102 +12,132 @@ namespace OpenToDo.App;
 
 public partial class MainWindow : Window
 {
-    private readonly JsonTaskRepository _repository = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenToDo", "tasks"));
+    private const string CheckIcon = "M5 12.5 L10 17.5 L19 7";
+    private const string AlertIcon = "M12 4 L22 20 H2 Z M12 10 V14 M12 17 V17.5";
+    private const int ChartDays = 14;
+    private const double ChartMaxBarHeight = 112;
+
+    private readonly JsonTaskRepository _repository =
+        new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenToDo", "tasks"));
     private readonly AiSettingsStore _settingsStore = new();
-    private readonly string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenToDo", "config.json");
-    private string _username = string.Empty;
     private readonly AiClient _aiClient = new();
     private readonly List<TaskItem> _tasks = [];
+    private readonly Dictionary<AiProvider, string[]> _modelCache = new();
+    private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMinutes(1) };
+    private readonly DispatcherTimer _toastTimer = new();
+
     private AiSettings _aiSettings = new();
+    private AiProvider _formProvider = AiProvider.OpenAI;
+    private CancellationTokenSource? _aiCts;
     private string _currentView = "home";
+    private DateTime _renderedDay = DateTime.Today;
     private bool _mutationInProgress;
-    private string _chatTranscript = string.Empty;
-    private TaskItem? _draggedTask;
-    private double _dragStartY;
-    private int _dragTargetIndex = -1;
-    private Border? _draggedRow;
+    private bool _aiBusy;
+    private bool _ready;
 
     public MainWindow()
     {
         InitializeComponent();
-        Opened += async (_, _) =>
+        _ready = true;
+
+        TemperatureBox.Value = 0.7m;
+        MaxOutputTokensBox.Value = 1024m;
+        UpdateTemperatureHint();
+
+        // TextBox.TextChanged isn't available on every version; PropertyChanged always is.
+        SearchBox.PropertyChanged += (_, e) =>
         {
-            try
-            {
-                await LoadProfileAsync();
-                _aiSettings = await _settingsStore.LoadAsync();
-                LoadProviderSettings();
-                await LoadTasksAsync();
-            }
-            catch (Exception ex)
-            {
-                AiStatus.Text = $"Startup warning: {ex.Message}";
-            }
+            if (e.Property == TextBox.TextProperty)
+                RefreshAll();
+        };
+
+        _toastTimer.Tick += (_, _) =>
+        {
+            _toastTimer.Stop();
+            ToastHost.IsVisible = false;
+        };
+
+        // Re-render when the date rolls over while the app is left open (stale "Today", streak and chart otherwise).
+        _clock.Tick += (_, _) =>
+        {
+            if (DateTime.Today != _renderedDay)
+                RefreshAll();
+        };
+
+        KeyDown += OnWindowKeyDown;
+        Opened += async (_, _) => await StartupAsync();
+        Closed += (_, _) =>
+        {
+            _clock.Stop();
+            _aiCts?.Cancel();
         };
     }
 
-    private async Task LoadProfileAsync()
-    {
-        if (!File.Exists(_configPath))
-        {
-            MainContent.IsVisible = false;
-            SetupPanel.IsVisible = true;
-            return;
-        }
+    // ------------------------------------------------------------------ startup
 
+    private async Task StartupAsync()
+    {
+        // Settings and tasks load independently: a damaged settings file must never hide the user's tasks.
         try
         {
-            using var document = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(_configPath));
-            if (document.RootElement.TryGetProperty("username", out var name))
-                _username = name.GetString()?.Trim() ?? string.Empty;
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            _username = string.Empty;
-        }
-
-        var hasProfile = !string.IsNullOrWhiteSpace(_username);
-        MainContent.IsVisible = hasProfile;
-        SetupPanel.IsVisible = !hasProfile;
-        if (hasProfile)
-            UsernameBox.Text = _username;
-    }
-
-    private async void SaveProfile_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _username = UsernameBox.Text?.Trim() ?? string.Empty;
-        UsernameBox.Classes.Set("invalid", string.IsNullOrWhiteSpace(_username));
-        UsernameError.IsVisible = string.IsNullOrWhiteSpace(_username);
-        if (string.IsNullOrWhiteSpace(_username))
-            return;
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
-            await File.WriteAllTextAsync(_configPath, System.Text.Json.JsonSerializer.Serialize(new { username = _username }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-            SetupPanel.IsVisible = false;
-            MainContent.IsVisible = true;
-            RefreshTaskList();
+            _aiSettings = await _settingsStore.LoadAsync();
+            if (_settingsStore.LoadWarning is { } warning)
+                ShowToast(warning, isError: true);
         }
         catch (Exception ex)
         {
-            UsernameError.Text = $"Couldn't save your profile: {ex.Message}";
-            UsernameError.IsVisible = true;
+            _aiSettings = new AiSettings();
+            ShowToast($"Couldn't load settings: {ex.Message}", isError: true);
         }
+
+        _formProvider = SelectedProvider;
+        LoadProviderSettings();
+
+        try
+        {
+            await LoadTasksAsync();
+            if (_repository.LastSkippedCount > 0)
+                ShowToast($"{_repository.LastSkippedCount} task file(s) couldn't be read and were skipped.", isError: true);
+        }
+        catch (Exception ex)
+        {
+            RefreshAll();
+            ShowToast($"Couldn't load tasks: {ex.Message}", isError: true);
+        }
+
+        _clock.Start();
     }
 
     private async Task LoadTasksAsync()
     {
+        var loaded = await _repository.GetAllAsync();
         _tasks.Clear();
-        _tasks.AddRange(await _repository.GetAllAsync());
-        RefreshTaskList();
+        _tasks.AddRange(loaded);
+        RefreshAll();
     }
 
-    private void RefreshTaskList()
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.N && !e.Handled)
+        {
+            e.Handled = true;
+            NewTask_OnClick(this, new RoutedEventArgs());
+        }
+    }
+
+    // ------------------------------------------------------------------ rendering
+
+    private void RefreshAll()
+    {
+        if (!_ready)
+            return;
+
+        var today = DateTime.Today;
+        _renderedDay = today;
+
         PageTitle.Text = _currentView switch
         {
-            "todo" => "Todo",
+            "todo" => "To-do",
             "completed" => "Completed",
             "settings" => "Settings",
             _ => "Home"
@@ -115,214 +145,328 @@ public partial class MainWindow : Window
 
         PageSubtitle.Text = _currentView switch
         {
-            "todo" => "Tasks that still need doing.",
-            "completed" => "Completed tasks, kept as an archive.",
+            "todo" => "Everything that still needs doing.",
+            "completed" => "A look back at what you've finished.",
             "settings" => "AI providers and application configuration.",
-            _ => string.IsNullOrWhiteSpace(_username) ? "Your productivity overview." : $"Welcome back, {_username}."
+            _ => today.ToString("dddd, MMMM d")
         };
 
         HomePanel.IsVisible = _currentView == "home";
         TodoPanel.IsVisible = _currentView == "todo";
         CompletedPanel.IsVisible = _currentView == "completed";
         SettingsPanel.IsVisible = _currentView == "settings";
+        NewTaskButton.IsVisible = _currentView != "settings";
 
-        TodoList.ItemsSource = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder).ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToArray();
-        CompletedList.ItemsSource = _tasks.Where(t => t.IsCompleted).ToArray();
-        TaskList.ItemsSource = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder).ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).Take(5).ToArray();
+        SetClass(NavHome, "active", _currentView == "home");
+        SetClass(NavTodo, "active", _currentView == "todo");
+        SetClass(NavCompleted, "active", _currentView == "completed");
+        SetClass(NavSettings, "active", _currentView == "settings");
 
-        if (_currentView == "home")
-            RefreshAnalytics();
+        var sorted = TaskQueries.Sort(_tasks).ToArray();
+        var active = sorted.Where(t => !t.IsCompleted).ToArray();
+        var done = sorted
+            .Where(t => t.IsCompleted)
+            .OrderByDescending(t => TaskQueries.LastCompletion(t) ?? DateTime.MinValue)
+            .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        TodoBadgeText.Text = active.Length > 99 ? "99+" : active.Length.ToString();
+        TodoBadge.IsVisible = active.Length > 0;
+        DoneBadgeText.Text = done.Length > 99 ? "99+" : done.Length.ToString();
+        DoneBadge.IsVisible = done.Length > 0;
+
+        // Home
+        var upNext = active.Take(5).Select(t => TaskRow.From(t, today)).ToArray();
+        TaskList.ItemsSource = upNext;
+        HomeEmpty.IsVisible = upNext.Length == 0;
+
+        // To-do (with search)
+        var query = SearchBox.Text?.Trim();
+        var searching = !string.IsNullOrEmpty(query);
+        var filtered = active.Where(t => TaskQueries.Matches(t, query)).Select(t => TaskRow.From(t, today)).ToArray();
+        TodoList.ItemsSource = filtered;
+        TodoEmpty.IsVisible = filtered.Length == 0;
+        TodoEmptyTitle.Text = searching ? "No matches" : "Nothing to do";
+        TodoEmptyText.Text = searching
+            ? $"No open task matches “{query}”."
+            : "Use quick add above or press Ctrl+N.";
+        TodoCountLabel.Text = searching
+            ? $"{filtered.Length} of {active.Length} open task{(active.Length == 1 ? "" : "s")}"
+            : $"{active.Length} open task{(active.Length == 1 ? "" : "s")}";
+
+        // Completed
+        CompletedList.ItemsSource = done.Select(t => TaskRow.From(t, today)).ToArray();
+        CompletedEmpty.IsVisible = done.Length == 0;
+        DoneCountLabel.Text = $"{done.Length} completed task{(done.Length == 1 ? "" : "s")}";
+
+        RefreshHome(active, today);
     }
 
-    private void RefreshAnalytics()
+    private void RefreshHome(TaskItem[] active, DateTime today)
     {
-        var today = DateTime.Now.Date;
-        var history = _tasks
-            .SelectMany(t => t.CompletionHistory ?? Array.Empty<DateTimeOffset>())
-            .Select(d => d.LocalDateTime.Date)
-            .Where(d => d <= today)
-            .ToArray();
+        var summary = TaskAnalytics.Summarize(_tasks, today);
+        var overdue = active.Count(t => TaskQueries.IsOverdue(t, today));
+        var dueToday = active.Count(t => TaskQueries.IsDueToday(t, today));
 
-        var weekStart = today.AddDays(-(int)((7 + (int)today.DayOfWeek - (int)DayOfWeek.Monday) % 7));
-        var monthStart = new DateTime(today.Year, today.Month, 1);
-        var yearStart = new DateTime(today.Year, 1, 1);
+        var hour = DateTime.Now.Hour;
+        HeroGreeting.Text = hour switch
+        {
+            < 5 => "Still up?",
+            < 12 => "Good morning",
+            < 18 => "Good afternoon",
+            _ => "Good evening"
+        };
 
-        CompletedTotal.Text = history.Length.ToString();
-        CompletedDay.Text = history.Count(d => d == today).ToString();
-        CompletedWeek.Text = history.Count(d => d >= weekStart).ToString();
-        CompletedMonth.Text = history.Count(d => d >= monthStart).ToString();
-        CompletedYear.Text = history.Count(d => d >= yearStart).ToString();
+        if (active.Length == 0)
+        {
+            HeroSummary.Text = summary.Today > 0
+                ? $"Inbox zero. You wrapped up {summary.Today} task{(summary.Today == 1 ? "" : "s")} today."
+                : "Nothing on your plate. Add a task to get started.";
+        }
+        else
+        {
+            var parts = new List<string> { $"{active.Length} open task{(active.Length == 1 ? "" : "s")}" };
+            if (overdue > 0) parts.Add($"{overdue} overdue");
+            if (dueToday > 0) parts.Add($"{dueToday} due today");
+            HeroSummary.Text = string.Join("  ·  ", parts);
+        }
 
-        var daily = Enumerable.Range(0, 14)
-            .Select(i => today.AddDays(-13 + i))
-            .Select(date => new AnalyticsBar(date.ToString("ddd"), history.Count(d => d == date), 0))
-            .ToArray();
+        StreakText.Text = summary.Streak switch
+        {
+            0 => "No streak yet",
+            1 => "1 day streak",
+            _ => $"{summary.Streak} day streak"
+        };
+        StreakHint.Text = summary.Streak > 0 && summary.Today == 0
+            ? "Finish a task today to keep it alive"
+            : $"{summary.Total} completed all-time";
 
-        var max = Math.Max(1, daily.Max(x => x.Count));
-        var bars = daily.Select(x => x with { Width = 760d * x.Count / max }).ToArray();
+        CompletedDay.Text = summary.Today.ToString();
+        CompletedWeek.Text = summary.Week.ToString();
+        CompletedMonth.Text = summary.Month.ToString();
+        CompletedYear.Text = summary.Year.ToString();
+
+        var counts = TaskAnalytics.DailyCounts(_tasks, today, ChartDays);
+        var max = Math.Max(1, counts.Max());
+        var bars = counts.Select((count, i) =>
+        {
+            var date = today.AddDays(i - (ChartDays - 1));
+            var height = count == 0 ? 3 : Math.Max(10, ChartMaxBarHeight * count / max);
+            return new AnalyticsBar(
+                $"{date:ddd}\n{date.Day}",
+                date.ToString("dddd, MMM d"),
+                count,
+                height,
+                date == today);
+        }).ToArray();
+
         DailyChart.ItemsSource = bars;
-        DailyNumbers.ItemsSource = bars;
+        DailyNumbers.ItemsSource = Enumerable.Reverse(bars).ToArray();
     }
 
-    private void GraphMode_OnClick(object? sender, RoutedEventArgs e)
+    private static void SetClass(StyledElement element, string name, bool on)
     {
-        GraphPanel.IsVisible = true;
-        NumberPanel.IsVisible = false;
-        ChartSubtitle.Text = "Last 14 days";
+        if (on)
+        {
+            if (!element.Classes.Contains(name))
+                element.Classes.Add(name);
+        }
+        else
+        {
+            element.Classes.Remove(name);
+        }
     }
 
-    private void NumberMode_OnClick(object? sender, RoutedEventArgs e)
+    private void ShowToast(string message, bool isError = false)
     {
-        GraphPanel.IsVisible = false;
-        NumberPanel.IsVisible = true;
-        ChartSubtitle.Text = "Last 14 days · exact counts";
+        ToastText.Text = message;
+        ToastIcon.Data = Geometry.Parse(isError ? AlertIcon : CheckIcon);
+        SetClass(ToastHost, "error", isError);
+        ToastHost.IsVisible = true;
+
+        _toastTimer.Stop();
+        _toastTimer.Interval = TimeSpan.FromSeconds(isError ? 7 : 3);
+        _toastTimer.Start();
     }
+
+    // ------------------------------------------------------------------ chart mode
+
+    private void GraphMode_OnClick(object? sender, RoutedEventArgs e) => SetChartMode(graph: true);
+    private void NumberMode_OnClick(object? sender, RoutedEventArgs e) => SetChartMode(graph: false);
+
+    private void SetChartMode(bool graph)
+    {
+        DailyChart.IsVisible = graph;
+        DailyNumbers.IsVisible = !graph;
+        SetClass(GraphModeButton, "active", graph);
+        SetClass(NumberModeButton, "active", !graph);
+        ChartSubtitle.Text = graph ? $"Last {ChartDays} days" : $"Last {ChartDays} days · exact counts";
+    }
+
+    // ------------------------------------------------------------------ navigation
+
+    private void Home_OnClick(object? sender, RoutedEventArgs e) => Navigate("home");
+    private void Todo_OnClick(object? sender, RoutedEventArgs e) => Navigate("todo");
+    private void Completed_OnClick(object? sender, RoutedEventArgs e) => Navigate("completed");
+    private void Settings_OnClick(object? sender, RoutedEventArgs e) => Navigate("settings");
+
+    private void Navigate(string view)
+    {
+        _currentView = view;
+        RefreshAll();
+    }
+
+    // ------------------------------------------------------------------ task actions
 
     private async void NewTask_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (_mutationInProgress)
-            return;
-
-        var editor = new TaskEditorWindow(new TaskItem(Guid.NewGuid().ToString("N"), string.Empty), true);
-        var result = await editor.ShowDialog<TaskItem?>(this);
-
-        if (result is null)
-            return;
-
-        await RunMutationAsync(async () =>
+        try
         {
-            var nextOrder = _tasks.Where(t => !t.IsCompleted).Select(t => t.SortOrder).DefaultIfEmpty(-1).Max() + 1;
-            await _repository.SaveAsync(result with { SortOrder = nextOrder });
-            _currentView = "todo";
-            await LoadTasksAsync();
-        });
+            if (_mutationInProgress)
+                return;
+
+            var blank = new TaskItem(Guid.NewGuid().ToString("N"), string.Empty, CreatedAt: DateTimeOffset.Now);
+            var result = await new TaskEditorWindow(blank, isNew: true).ShowDialog<TaskItem?>(this);
+            if (result is null)
+                return;
+
+            await RunMutationAsync(async () =>
+            {
+                await _repository.SaveAsync(result);
+                _currentView = "todo";
+                SearchBox.Text = string.Empty; // otherwise a stale filter could hide the task that was just added
+            }, "Task added");
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Couldn't open the editor: {ex.Message}", isError: true);
+        }
+    }
+
+    private async void QuickAdd_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+
+        e.Handled = true;
+        var title = QuickAddBox.Text?.Trim();
+        if (string.IsNullOrEmpty(title) || _mutationInProgress)
+            return;
+
+        if (title.Length > TaskLimits.MaxTitleLength)
+            title = title[..TaskLimits.MaxTitleLength];
+
+        var task = new TaskItem(Guid.NewGuid().ToString("N"), title, CreatedAt: DateTimeOffset.Now);
+        var saved = await RunMutationAsync(() => _repository.SaveAsync(task), "Task added");
+        if (saved)
+        {
+            QuickAddBox.Text = string.Empty;
+            SearchBox.Text = string.Empty;
+        }
+        QuickAddBox.Focus();
     }
 
     private async void Edit_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task })
-            return;
-
-        var editor = new TaskEditorWindow(task);
-        var result = await editor.ShowDialog<TaskItem?>(this);
-
-        if (result is null)
-            return;
-
-        await RunMutationAsync(async () =>
+        try
         {
-            await _repository.SaveAsync(result);
-            await LoadTasksAsync();
-        });
+            if (_mutationInProgress || sender is not Button { DataContext: TaskRow row })
+                return;
+
+            var result = await new TaskEditorWindow(row.Task).ShowDialog<TaskItem?>(this);
+            if (result is null || result == row.Task)
+                return;
+
+            await RunMutationAsync(() => _repository.SaveAsync(result), "Changes saved");
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Couldn't open the editor: {ex.Message}", isError: true);
+        }
     }
 
     private async void ToggleCompleted_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task })
+        if (_mutationInProgress || sender is not Button { DataContext: TaskRow row })
             return;
 
-        await RunMutationAsync(async () =>
-        {
-            if (task.IsCompleted)
-            {
-                await _repository.SaveAsync(task with { IsCompleted = false });
-            }
-            else
-            {
-                var history = (task.CompletionHistory ?? Array.Empty<DateTimeOffset>()).ToList();
-                history.Add(DateTimeOffset.Now);
-                await _repository.SaveAsync(task with { IsCompleted = true, CompletionHistory = history });
-            }
-
-            await LoadTasksAsync();
-        });
+        var updated = TaskQueries.Complete(row.Task, DateTimeOffset.Now);
+        await RunMutationAsync(() => _repository.SaveAsync(updated), "Task completed");
     }
 
     private async void Restore_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task } || !task.IsCompleted)
+        if (_mutationInProgress || sender is not Button { DataContext: TaskRow row } || !row.Task.IsCompleted)
             return;
 
-        await RunMutationAsync(async () =>
-        {
-            await _repository.SaveAsync(task with { IsCompleted = false });
-            await LoadTasksAsync();
-        });
+        var updated = TaskQueries.Restore(row.Task);
+        await RunMutationAsync(() => _repository.SaveAsync(updated), "Moved back to to-do");
     }
 
     private async void Delete_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (_mutationInProgress || sender is not Button button || button.DataContext is not TaskItem task)
-            return;
-
-        if (!string.Equals(button.Content?.ToString(), "Are you sure?", StringComparison.Ordinal))
-        {
-            button.Content = "Are you sure?";
-            button.MinWidth = 104;
-            return;
-        }
-
-        var row = button.GetVisualAncestors().OfType<Border>()
-            .FirstOrDefault(candidate => candidate.Classes.Contains("task-row"));
-        if (row is not null)
-        {
-            row.Classes.Set("deleting", true);
-            row.RenderTransform = new TranslateTransform(520, 0);
-            row.Opacity = 0;
-            await Task.Delay(240);
-        }
-
-        await RunMutationAsync(async () =>
-        {
-            await _repository.DeleteAsync(task.Id);
-            await LoadTasksAsync();
-        });
-    }
-
-    private async Task RunMutationAsync(Func<Task> mutation)
-    {
-        if (_mutationInProgress)
-            return;
-
-        _mutationInProgress = true;
         try
         {
-            await mutation();
+            if (_mutationInProgress || sender is not Button { DataContext: TaskRow row })
+                return;
+
+            var confirmed = await new ConfirmDialog(
+                "Delete task?",
+                $"“{row.Title}” will be permanently removed, along with its completion history. This can't be undone.",
+                "Delete").ShowDialog<bool>(this);
+
+            if (!confirmed)
+                return;
+
+            await RunMutationAsync(() => _repository.DeleteAsync(row.Task.Id), "Task deleted");
         }
         catch (Exception ex)
         {
-            AiStatus.Text = $"Operation failed: {ex.Message}";
+            ShowToast($"Couldn't delete: {ex.Message}", isError: true);
+        }
+    }
+
+    /// <summary>
+    /// Runs a disk mutation, then always reloads from disk so the screen reflects what is really stored,
+    /// even when the mutation failed. Failures surface as a toast instead of disappearing.
+    /// </summary>
+    private async Task<bool> RunMutationAsync(Func<Task> mutation, string successMessage)
+    {
+        if (_mutationInProgress)
+            return false;
+
+        _mutationInProgress = true;
+        var success = false;
+        try
+        {
+            await mutation();
+            success = true;
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Operation failed: {ex.Message}", isError: true);
         }
         finally
         {
+            try
+            {
+                await LoadTasksAsync();
+            }
+            catch (Exception ex)
+            {
+                ShowToast($"Couldn't refresh tasks: {ex.Message}", isError: true);
+            }
+
             _mutationInProgress = false;
         }
+
+        if (success)
+            ShowToast(successMessage);
+
+        return success;
     }
 
-    private void Home_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _currentView = "home";
-        RefreshTaskList();
-    }
-
-    private void Todo_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _currentView = "todo";
-        RefreshTaskList();
-    }
-
-    private void Completed_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _currentView = "completed";
-        RefreshTaskList();
-    }
-
-    private void Settings_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _currentView = "settings";
-        LoadProviderSettings();
-        RefreshTaskList();
-    }
+    // ------------------------------------------------------------------ AI settings
 
     private AiProvider SelectedProvider => ProviderCombo.SelectedIndex switch
     {
@@ -333,62 +477,19 @@ public partial class MainWindow : Window
 
     private void Provider_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (IsInitialized)
-            LoadProviderSettings();
-    }
-
-    private void LoadProviderSettings()
-    {
-        if (ProviderCombo is null || ApiKeyBox is null)
+        if (!_ready || ApiKeyBox is null)
             return;
 
-        var provider = SelectedProvider;
-        ApiKeyBox.Text = provider switch
-        {
-            AiProvider.Groq => _aiSettings.GroqApiKey,
-            AiProvider.OpenRouter => _aiSettings.OpenRouterApiKey,
-            _ => _aiSettings.OpenAiApiKey
-        };
-
-        var model = GetStoredModel(provider);
-        ModelComboBox.ItemsSource = string.IsNullOrWhiteSpace(model) ? Array.Empty<string>() : new[] { model };
-        ModelComboBox.SelectedItem = string.IsNullOrWhiteSpace(model) ? null : model;
-        TemperatureBox.Value = (decimal)Math.Clamp(_aiSettings.Temperature, 0, 2);
-        TemperatureBox.IsEnabled = provider != AiProvider.OpenAI;
-        MaxOutputTokensBox.Value = Math.Clamp(_aiSettings.MaxOutputTokens, 1, 131072);
-        AiStatus.Text = $"Provider: {provider}. Fetch models to validate the key and load the current model catalog.";
+        // Keep whatever was typed for the provider we're leaving; switching must never discard edits.
+        CommitFormToSettings(_formProvider);
+        _formProvider = SelectedProvider;
+        LoadProviderSettings();
     }
 
-    private async void FetchModels_OnClick(object? sender, RoutedEventArgs e)
+    private void CommitFormToSettings(AiProvider provider)
     {
-        try
-        {
-            var provider = SelectedProvider;
-            var key = ApiKeyBox.Text?.Trim() ?? string.Empty;
-            AiStatus.Text = $"Fetching {provider} models...";
-
-            var models = await _aiClient.GetModelsAsync(provider, key);
-            var ids = models.Select(m => m.Id).ToArray();
-            ModelComboBox.ItemsSource = ids;
-
-            var current = GetStoredModel(provider);
-            ModelComboBox.SelectedItem = ids.Contains(current, StringComparer.OrdinalIgnoreCase)
-                ? current
-                : ids.FirstOrDefault();
-
-            AiStatus.Text = $"Loaded {ids.Length} models from {provider}.";
-        }
-        catch (Exception ex)
-        {
-            AiStatus.Text = $"Model fetch failed: {ex.Message}";
-        }
-    }
-
-    private async void SaveSettings_OnClick(object? sender, RoutedEventArgs e)
-    {
-        var provider = SelectedProvider;
         var key = ApiKeyBox.Text?.Trim() ?? string.Empty;
-        var model = ModelComboBox.SelectedItem?.ToString() ?? string.Empty;
+        var model = ModelComboBox.SelectedItem?.ToString() ?? GetStoredModel(provider);
 
         switch (provider)
         {
@@ -408,411 +509,44 @@ public partial class MainWindow : Window
 
         _aiSettings.Temperature = (double)(TemperatureBox.Value ?? 0.7m);
         _aiSettings.MaxOutputTokens = (int)(MaxOutputTokensBox.Value ?? 1024m);
-
-        try
-        {
-            await _settingsStore.SaveAsync(_aiSettings);
-            AiStatus.Text = $"Saved {provider} settings securely.";
-        }
-        catch (Exception ex)
-        {
-            AiStatus.Text = $"Save failed: {ex.Message}";
-        }
+        _aiSettings.Normalize();
     }
 
-    private async void TestAi_OnClick(object? sender, RoutedEventArgs e)
+    private void LoadProviderSettings()
     {
-        try
-        {
-            var provider = SelectedProvider;
-            var key = ApiKeyBox.Text?.Trim() ?? string.Empty;
-            var model = ModelComboBox.SelectedItem?.ToString() ?? GetStoredModel(provider);
-            AiStatus.Text = $"Running {provider} test...";
-            AiOutput.Text = await _aiClient.GenerateAsync(
-                provider,
-                key,
-                model,
-                AiPromptBox.Text?.Trim() ?? string.Empty,
-                (double)(TemperatureBox.Value ?? 0.7m),
-                (int)(MaxOutputTokensBox.Value ?? 1024m));
-            AiStatus.Text = $"AI test completed using {model}.";
-        }
-        catch (Exception ex)
-        {
-            AiStatus.Text = $"AI test failed: {ex.Message}";
-        }
-    }
-
-
-    private async void MoveTaskUp_OnClick(object? sender, RoutedEventArgs e) =>
-        await MoveTaskAsync(sender, -1);
-
-    private async void MoveTaskDown_OnClick(object? sender, RoutedEventArgs e) =>
-        await MoveTaskAsync(sender, 1);
-
-    private async Task MoveTaskAsync(object? sender, int offset)
-    {
-        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task })
-            return;
-        var active = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder)
-            .ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList();
-        var index = active.FindIndex(t => t.Id == task.Id);
-        var target = index + offset;
-        if (index < 0 || target < 0 || target >= active.Count) return;
-        (active[index], active[target]) = (active[target], active[index]);
-        await RunMutationAsync(async () =>
-        {
-            for (var i = 0; i < active.Count; i++) await _repository.SaveAsync(active[i] with { SortOrder = i });
-            await LoadTasksAsync();
-        });
-    }
-
-    private async void SendAi_OnClick(object? sender, RoutedEventArgs e)
-    {
-        var userMessage = AiChatInput.Text?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(userMessage)) { AiChatStatus.Text = "Enter a message first."; return; }
         var provider = SelectedProvider;
-        var apiKey = GetStoredApiKey(provider);
+        ApiKeyBox.Text = provider switch
+        {
+            AiProvider.Groq => _aiSettings.GroqApiKey,
+            AiProvider.OpenRouter => _aiSettings.OpenRouterApiKey,
+            _ => _aiSettings.OpenAiApiKey
+        };
+
         var model = GetStoredModel(provider);
-        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(model))
-        {
-            AiChatStatus.Text = "Configure an API key and model in Settings, then save them.";
-            return;
-        }
+        var items = new List<string>(_modelCache.TryGetValue(provider, out var cached) ? cached : Array.Empty<string>());
+        if (!string.IsNullOrWhiteSpace(model) && !items.Contains(model, StringComparer.OrdinalIgnoreCase))
+            items.Insert(0, model);
 
-        AiChatInput.Text = string.Empty;
-        AppendChat("You", userMessage);
-        AiChatStatus.Text = $"Thinking with {provider}…";
-        try
-        {
-            var taskSnapshot = _tasks.OrderBy(t => t.IsCompleted).ThenBy(t => t.SortOrder).ThenBy(t => t.DueDate)
-                .Select(t => new { id = t.Id, title = t.Title, description = t.Description, completed = t.IsCompleted, dueDate = t.DueDate?.ToString("O"), sortOrder = t.SortOrder }).ToArray();
-            var systemPrompt = """
-You are the task assistant inside OpenToDo. The task list is supplied as JSON context.
-Respond with exactly one JSON object, no markdown, using this schema:
-{"message":"short user-facing explanation","actions":[ ... ]}
-Supported actions:
-- {"type":"add","title":"...","description":"optional","dueDate":"optional ISO-8601 date/time"}
-- {"type":"update","taskId":"existing exact id","title":"optional new title","description":"optional new description","dueDate":"optional ISO-8601 date/time"}
-- {"type":"complete","taskId":"existing exact id","completed":true}
-- {"type":"reorder","taskIds":["existing-id-1","existing-id-2"]}
-For a read-only question, use an empty actions array and answer in message.
-Never invent task IDs. For update/complete/reorder, use IDs from the supplied task list.
-For reorder, include all active task IDs in the requested order. Do not delete tasks.
-Only perform actions the user clearly requested. If the intent is ambiguous, ask a question in message and return no actions.
-""";
-            var prompt = systemPrompt + "\n\nCurrent task list JSON:\n" + System.Text.Json.JsonSerializer.Serialize(taskSnapshot) +
-                          "\n\nConversation so far:\n" + _chatTranscript +
-                          "\n\nLatest user request:\n" + userMessage;
-            var raw = await _aiClient.GenerateAsync(provider, apiKey, model, prompt, _aiSettings.Temperature, _aiSettings.MaxOutputTokens);
-            using var document = System.Text.Json.JsonDocument.Parse(ExtractJsonObject(raw));
-            var root = document.RootElement;
-            var message = root.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == System.Text.Json.JsonValueKind.String
-                ? messageElement.GetString() ?? string.Empty : "Done.";
-            AppendChat("AI", message);
-            var actionCount = 0;
-            if (root.TryGetProperty("actions", out var actions) && actions.ValueKind == System.Text.Json.JsonValueKind.Array)
-            {
-                foreach (var action in actions.EnumerateArray())
-                {
-                    await ApplyAiActionAsync(action);
-                    await LoadTasksAsync();
-                    actionCount++;
-                }
-            }
-            AiChatStatus.Text = actionCount == 0 ? $"Response received from {provider}." : $"Applied {actionCount} task action(s).";
-        }
-        catch (Exception ex)
-        {
-            AiChatStatus.Text = $"AI request failed: {ex.Message}";
-            AppendChat("System", "I couldn't apply that request. Check provider/model settings and try again.");
-        }
+        ModelComboBox.ItemsSource = items;
+        ModelComboBox.SelectedItem = string.IsNullOrWhiteSpace(model)
+            ? null
+            : items.First(i => string.Equals(i, model, StringComparison.OrdinalIgnoreCase));
+
+        TemperatureBox.Value = (decimal)Math.Clamp(_aiSettings.Temperature, 0, 2);
+        MaxOutputTokensBox.Value = Math.Clamp(_aiSettings.MaxOutputTokens, 1, AiSettings.MaxTokenLimit);
+        UpdateTemperatureHint();
+        SetStatus($"{provider}: fetch models to validate the key and load the current model list.");
     }
 
-    private string GetStoredApiKey(AiProvider provider) => provider switch
+    private void UpdateTemperatureHint()
     {
-        AiProvider.Groq => _aiSettings.GroqApiKey,
-        AiProvider.OpenRouter => _aiSettings.OpenRouterApiKey,
-        _ => _aiSettings.OpenAiApiKey
-    };
-
-    private void AppendChat(string speaker, string message)
-    {
-        _chatTranscript = string.IsNullOrWhiteSpace(_chatTranscript)
-            ? $"{speaker}: {message}"
-            : _chatTranscript + Environment.NewLine + Environment.NewLine + $"{speaker}: {message}";
-
-        var isUser = string.Equals(speaker, "You", StringComparison.Ordinal);
-        var bubble = new Border
-        {
-            MaxWidth = 255,
-            Margin = new Avalonia.Thickness(isUser ? 12 : 0, 0, isUser ? 0 : 12, 0),
-            HorizontalAlignment = isUser ? Avalonia.Layout.HorizontalAlignment.Right : Avalonia.Layout.HorizontalAlignment.Left,
-            Background = new SolidColorBrush(isUser ? Color.Parse("#46516B") : Color.Parse("#252932")),
-            CornerRadius = new Avalonia.CornerRadius(12),
-            Padding = new Avalonia.Thickness(12, 9)
-        };
-        bubble.Child = new StackPanel
-        {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = speaker == "You" ? "You" : speaker == "System" ? "Notice" : "OpenToDo",
-                    FontSize = 10,
-                    FontWeight = Avalonia.Media.FontWeight.Bold,
-                    Foreground = new SolidColorBrush(Color.Parse(isUser ? "#DDE3F4" : "#AAB4D0"))
-                },
-                new TextBlock
-                {
-                    Text = message,
-                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                    Foreground = new SolidColorBrush(Color.Parse("#ECEEF1"))
-                }
-            }
-        };
-        ChatMessages.Children.Add(bubble);
-        ChatScroll.Offset = new Avalonia.Vector(ChatScroll.Offset.X, ChatScroll.Extent.Height);
+        var openAi = SelectedProvider == AiProvider.OpenAI;
+        TemperatureBox.IsEnabled = !openAi;
+        TemperatureHint.Text = openAi ? "Not used by OpenAI's Responses API." : string.Empty;
     }
 
-    private void TaskDrag_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (_mutationInProgress || sender is not Button { DataContext: TaskItem task } handle ||
-            !e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed)
-            return;
-
-        _draggedTask = task;
-        _dragStartY = e.GetPosition(TodoList).Y;
-        _dragTargetIndex = -1;
-        _draggedRow = handle.GetVisualAncestors().OfType<Border>()
-            .FirstOrDefault(candidate => candidate.Classes.Contains("task-row"));
-        if (_draggedRow is not null)
-        {
-            _draggedRow.Classes.Set("dragging", true);
-            _draggedRow.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            _draggedRow.RenderTransform = new ScaleTransform(1.025, 1.025);
-            _draggedRow.Opacity = 0.88;
-        }
-        handle.Classes.Set("dragging", true);
-        e.Pointer.Capture(TodoList);
-        e.Handled = true;
-        UpdateDropIndicator(_dragStartY);
-    }
-
-    private void TaskDrag_OnPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (_draggedTask is null)
-            return;
-
-        var y = e.GetPosition(TodoList).Y;
-        UpdateDropIndicator(y);
-        // A picked-up row follows the pointer slightly, while the blue insertion line
-        // previews the exact slot that will receive the task on release.
-        if (_draggedRow is not null)
-            _draggedRow.RenderTransform = new TranslateTransform(0, Math.Clamp(y - _dragStartY, -80, 80) * 0.18);
-        e.Handled = true;
-    }
-
-    private async void TaskDrag_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (_draggedTask is null)
-            return;
-
-        var task = _draggedTask;
-        var targetIndex = _dragTargetIndex;
-        _draggedTask = null;
-        _dragTargetIndex = -1;
-        e.Pointer.Capture(null);
-        if (_draggedRow is not null)
-        {
-            _draggedRow.Classes.Set("dragging", false);
-            _draggedRow.RenderTransform = new TranslateTransform(0, 0);
-            _draggedRow.Opacity = 1;
-            _draggedRow = null;
-        }
-        ClearDropIndicators();
-        e.Handled = true;
-
-        if (targetIndex >= 0)
-            await ReorderTaskToIndexAsync(task, targetIndex);
-    }
-
-    private void UpdateDropIndicator(double pointerY)
-    {
-        var rows = TodoList.GetVisualDescendants().OfType<Border>()
-            .Where(row => row.Classes.Contains("task-row") && row.DataContext is TaskItem)
-            .OrderBy(row => row.TranslatePoint(new Point(0, 0), TodoList)?.Y ?? double.MaxValue)
-            .ToList();
-        ClearDropIndicators();
-        if (rows.Count == 0)
-        {
-            _dragTargetIndex = -1;
-            return;
-        }
-
-        var draggedIndex = rows.FindIndex(row => row.DataContext is TaskItem item && item.Id == _draggedTask?.Id);
-        var targetIndex = rows.Count;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var top = rows[i].TranslatePoint(new Point(0, 0), TodoList)?.Y ?? 0;
-            var middle = top + rows[i].Bounds.Height / 2;
-            if (pointerY < middle)
-            {
-                targetIndex = i;
-                break;
-            }
-        }
-
-        // Convert the insertion slot to the final index after removing the dragged item.
-        if (draggedIndex >= 0 && targetIndex > draggedIndex)
-            targetIndex--;
-        _dragTargetIndex = Math.Clamp(targetIndex, 0, Math.Max(0, rows.Count - 1));
-
-        var indicatorIndex = targetIndex >= rows.Count ? rows.Count - 1 : targetIndex;
-        var indicator = (rows[indicatorIndex].Parent as Grid)?.Children.OfType<Border>()
-            .FirstOrDefault(candidate => candidate.Name == "DropIndicator");
-        if (indicator is not null)
-        {
-            indicator.VerticalAlignment = targetIndex >= rows.Count
-                ? Avalonia.Layout.VerticalAlignment.Bottom
-                : Avalonia.Layout.VerticalAlignment.Top;
-            indicator.IsVisible = true;
-        }
-    }
-
-    private void ClearDropIndicators()
-    {
-        foreach (var indicator in TodoList.GetVisualDescendants().OfType<Border>()
-                     .Where(candidate => candidate.Name == "DropIndicator"))
-            indicator.IsVisible = false;
-    }
-
-    private async Task ReorderTaskToIndexAsync(TaskItem task, int targetIndex)
-    {
-        var active = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder)
-            .ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList();
-        var currentIndex = active.FindIndex(item => item.Id == task.Id);
-        if (currentIndex < 0 || active.Count < 2)
-            return;
-        targetIndex = Math.Clamp(targetIndex, 0, active.Count - 1);
-        if (targetIndex == currentIndex)
-        {
-            await LoadTasksAsync();
-            return;
-        }
-
-        active.RemoveAt(currentIndex);
-        active.Insert(targetIndex, task);
-        await RunMutationAsync(async () =>
-        {
-            for (var i = 0; i < active.Count; i++)
-                await _repository.SaveAsync(active[i] with { SortOrder = i });
-            await LoadTasksAsync();
-        });
-    }
-
-    private async Task ReorderTaskByOffsetAsync(TaskItem task, int offset)
-    {
-        if (_mutationInProgress) return;
-        var active = _tasks.Where(t => !t.IsCompleted).OrderBy(t => t.SortOrder)
-            .ThenBy(t => t.DueDate).ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ToList();
-        var index = active.FindIndex(t => t.Id == task.Id);
-        if (index < 0) return;
-        var target = Math.Clamp(index + offset, 0, active.Count - 1);
-        if (target == index) return;
-        active.RemoveAt(index);
-        active.Insert(target, task);
-        await RunMutationAsync(async () =>
-        {
-            for (var i = 0; i < active.Count; i++)
-                await _repository.SaveAsync(active[i] with { SortOrder = i });
-            await LoadTasksAsync();
-        });
-    }
-
-    private static string ExtractJsonObject(string response)
-    {
-        var text = response.Trim();
-        var start = text.IndexOf('{');
-        var end = text.LastIndexOf('}');
-        if (start < 0 || end <= start)
-            throw new InvalidOperationException("The AI response did not contain a valid task-action JSON object.");
-        return text[start..(end + 1)];
-    }
-
-    private async Task ApplyAiActionAsync(System.Text.Json.JsonElement action)
-    {
-        if (!action.TryGetProperty("type", out var typeElement)) return;
-        var type = typeElement.GetString();
-        string ReadString(string name) => action.TryGetProperty(name, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String
-            ? value.GetString() ?? string.Empty : string.Empty;
-
-        switch (type)
-        {
-            case "add":
-            {
-                var title = ReadString("title").Trim();
-                if (title.Length == 0 || title.Length > 300) throw new InvalidOperationException("AI task title was empty or too long.");
-                DateTimeOffset? due = null;
-                var dueText = ReadString("dueDate");
-                if (!string.IsNullOrWhiteSpace(dueText))
-                {
-                    if (!DateTimeOffset.TryParse(dueText, out var parsedDue)) throw new InvalidOperationException($"Invalid due date for task '{title}'.");
-                    due = parsedDue;
-                }
-                var nextOrder = _tasks.Where(t => !t.IsCompleted).Select(t => t.SortOrder).DefaultIfEmpty(-1).Max() + 1;
-                await _repository.SaveAsync(new TaskItem(Guid.NewGuid().ToString("N"), title, EmptyToNull(ReadString("description")), false, due, null, nextOrder));
-                break;
-            }
-            case "update":
-            {
-                var task = FindAiTask(ReadString("taskId"));
-                var title = ReadString("title");
-                var description = ReadString("description");
-                var dueText = ReadString("dueDate");
-                DateTimeOffset? due = task.DueDate;
-                if (!string.IsNullOrWhiteSpace(dueText))
-                {
-                    if (!DateTimeOffset.TryParse(dueText, out var parsedDue)) throw new InvalidOperationException("AI supplied an invalid due date.");
-                    due = parsedDue;
-                }
-                if (!string.IsNullOrWhiteSpace(title) && title.Trim().Length > 300) throw new InvalidOperationException("Task title is too long.");
-                await _repository.SaveAsync(task with { Title = string.IsNullOrWhiteSpace(title) ? task.Title : title.Trim(),
-                    Description = string.IsNullOrWhiteSpace(description) ? task.Description : EmptyToNull(description), DueDate = due });
-                break;
-            }
-            case "complete":
-            {
-                var task = FindAiTask(ReadString("taskId"));
-                var completed = action.TryGetProperty("completed", out var completedValue) && completedValue.ValueKind == System.Text.Json.JsonValueKind.True;
-                var history = (task.CompletionHistory ?? Array.Empty<DateTimeOffset>()).ToList();
-                if (completed && !task.IsCompleted) history.Add(DateTimeOffset.Now);
-                await _repository.SaveAsync(task with { IsCompleted = completed, CompletionHistory = history });
-                break;
-            }
-            case "reorder":
-            {
-                if (!action.TryGetProperty("taskIds", out var ids) || ids.ValueKind != System.Text.Json.JsonValueKind.Array)
-                    throw new InvalidOperationException("AI reorder action did not contain task IDs.");
-                var requested = ids.EnumerateArray().Where(v => v.ValueKind == System.Text.Json.JsonValueKind.String).Select(v => v.GetString() ?? string.Empty).ToList();
-                var active = _tasks.Where(t => !t.IsCompleted).ToDictionary(t => t.Id, StringComparer.Ordinal);
-                var ordered = requested.Where(active.ContainsKey).Distinct(StringComparer.Ordinal).Select(id => active[id]).ToList();
-                ordered.AddRange(_tasks.Where(t => !t.IsCompleted && !requested.Contains(t.Id, StringComparer.Ordinal)).OrderBy(t => t.SortOrder));
-                for (var i = 0; i < ordered.Count; i++) await _repository.SaveAsync(ordered[i] with { SortOrder = i });
-                break;
-            }
-        }
-    }
-
-    private TaskItem FindAiTask(string id)
-    {
-        if (string.IsNullOrWhiteSpace(id)) throw new InvalidOperationException("AI task action is missing a task ID.");
-        return _tasks.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal))
-            ?? throw new InvalidOperationException("AI referenced a task that no longer exists. Please retry.");
-    }
-
-    private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private void ToggleKey_OnClick(object? sender, RoutedEventArgs e) =>
+        ApiKeyBox.PasswordChar = ApiKeyBox.PasswordChar == '\0' ? '●' : '\0';
 
     private string GetStoredModel(AiProvider provider) => provider switch
     {
@@ -820,4 +554,140 @@ Only perform actions the user clearly requested. If the intent is ambiguous, ask
         AiProvider.OpenRouter => _aiSettings.OpenRouterModel,
         _ => _aiSettings.OpenAiModel
     };
+
+    private void SetStatus(string text, string kind = "info")
+    {
+        AiStatus.Text = text;
+        SetClass(AiStatus, "ok", kind == "ok");
+        SetClass(AiStatus, "error", kind == "error");
+    }
+
+    private void SetAiBusy(bool busy)
+    {
+        _aiBusy = busy;
+        FetchButton.IsEnabled = !busy;
+        SaveButton.IsEnabled = !busy;
+        TestButton.IsEnabled = !busy;
+        ProviderCombo.IsEnabled = !busy;
+        CancelAiButton.IsVisible = busy;
+    }
+
+    private void CancelAi_OnClick(object? sender, RoutedEventArgs e) => _aiCts?.Cancel();
+
+    /// <summary>Runs a network call with busy-state, cancellation and readable errors. Only one runs at a time.</summary>
+    private async Task RunAiAsync(string startMessage, Func<CancellationToken, Task> work)
+    {
+        if (_aiBusy)
+            return;
+
+        _aiCts?.Dispose();
+        _aiCts = new CancellationTokenSource();
+        SetAiBusy(true);
+        SetStatus(startMessage);
+
+        try
+        {
+            await work(_aiCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("Cancelled.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ex.Message, "error");
+        }
+        finally
+        {
+            SetAiBusy(false);
+        }
+    }
+
+    private async void FetchModels_OnClick(object? sender, RoutedEventArgs e)
+    {
+        var provider = SelectedProvider;
+        var key = ApiKeyBox.Text?.Trim() ?? string.Empty;
+
+        await RunAiAsync($"Fetching {provider} models…", async ct =>
+        {
+            var models = await _aiClient.GetModelsAsync(provider, key, ct);
+            var ids = models.Select(m => m.Id).ToArray();
+            _modelCache[provider] = ids;
+
+            if (ids.Length == 0)
+            {
+                SetStatus($"{provider} returned no models for this key.", "error");
+                return;
+            }
+
+            // The user may have switched provider while this was in flight; only touch the form if still relevant.
+            if (_formProvider == provider)
+            {
+                var current = ModelComboBox.SelectedItem?.ToString() ?? GetStoredModel(provider);
+                ModelComboBox.ItemsSource = ids;
+                ModelComboBox.SelectedItem = ids.FirstOrDefault(i => string.Equals(i, current, StringComparison.OrdinalIgnoreCase))
+                                             ?? ids[0];
+            }
+
+            SetStatus($"Loaded {ids.Length} models from {provider}.", "ok");
+        });
+    }
+
+    private async void SaveSettings_OnClick(object? sender, RoutedEventArgs e)
+    {
+        CommitFormToSettings(_formProvider);
+
+        if (_aiBusy)
+            return;
+
+        SetAiBusy(true);
+        try
+        {
+            var result = await _settingsStore.SaveAsync(_aiSettings);
+            if (result.SecretsStored)
+            {
+                SetStatus($"Saved {_formProvider} settings. Keys are in the OS credential store.", "ok");
+                ShowToast("Settings saved");
+            }
+            else
+            {
+                SetStatus(result.Warning ?? "Settings saved, but keys could not be stored securely.", "error");
+                ShowToast("Saved, but keys weren't stored securely", isError: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Save failed: {ex.Message}", "error");
+        }
+        finally
+        {
+            SetAiBusy(false);
+        }
+    }
+
+    private async void TestAi_OnClick(object? sender, RoutedEventArgs e)
+    {
+        var provider = SelectedProvider;
+        var key = ApiKeyBox.Text?.Trim() ?? string.Empty;
+        var model = ModelComboBox.SelectedItem?.ToString() ?? GetStoredModel(provider);
+        var prompt = AiPromptBox.Text?.Trim() ?? string.Empty;
+        var temperature = (double)(TemperatureBox.Value ?? 0.7m);
+        var tokens = (int)(MaxOutputTokensBox.Value ?? 1024m);
+
+        await RunAiAsync($"Running {provider} test…", async ct =>
+        {
+            AiOutput.Text = "Thinking…";
+            try
+            {
+                var output = await _aiClient.GenerateAsync(provider, key, model, prompt, temperature, tokens, ct);
+                AiOutput.Text = output;
+                SetStatus($"Test completed using {model}.", "ok");
+            }
+            catch
+            {
+                AiOutput.Text = "No output.";
+                throw;
+            }
+        });
+    }
 }

@@ -1,19 +1,25 @@
 # OpenToDo
 
-OpenToDo is a cross-platform, local-first to-do application built with C#/.NET 8 and Avalonia.
+A free, local-first to-do app with optional AI providers, built with C# / .NET 8 and Avalonia.
 
-## Current features
-- Home analytics for today, this week, this month, and this year.
-- Graph / exact-number analytics toggle.
-- Create, edit, complete, restore, and permanently delete tasks.
-- Optional descriptions and due dates.
-- Local JSON task storage.
-- Fluent desktop UI for Windows, macOS, and Linux.
-- OpenAI, Groq, and OpenRouter settings with live model fetching.
-- In-app AI connection test.
-- API keys stored in the native OS credential/keyring system rather than settings.json.
+- **Local-first:** every task is a plain JSON file under `%LOCALAPPDATA%/OpenToDo/tasks` (or the platform equivalent).
+- **Home dashboard:** greeting, completion streak, day/week/month/year stats and a 14-day activity chart.
+- **Fast capture:** quick-add bar, `Ctrl+N` for the full editor, due-date shortcuts, search.
+- **AI (optional):** OpenAI, Groq and OpenRouter. API keys live in the OS credential store, never in `settings.json`.
 
-## Development
-Open OpenToDo.sln in Visual Studio with the Avalonia extension installed, then build and run the application.
+## Build & test
 
-Avalonia 12 uses compiled bindings by default. Typed DataTemplate bindings are used for task and chart objects.
+```bash
+dotnet build OpenToDo.sln
+dotnet test
+dotnet run --project src/OpenToDo.App
+```
+
+## Layout
+
+| Project | Purpose |
+|---|---|
+| `OpenToDo.Core` | Task model, ordering/completion rules, analytics |
+| `OpenToDo.Data` | Crash-safe JSON repository |
+| `OpenToDo.Plugins` | AI client + settings/keyring store |
+| `OpenToDo.App` | Avalonia desktop UI |

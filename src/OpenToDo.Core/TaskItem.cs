@@ -7,4 +7,4 @@ public sealed record TaskItem(
     bool IsCompleted = false,
     DateTimeOffset? DueDate = null,
     IReadOnlyList<DateTimeOffset>? CompletionHistory = null,
-    int SortOrder = 0);
+    DateTimeOffset? CreatedAt = null);
