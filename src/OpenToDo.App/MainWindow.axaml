@@ -1,29 +1,493 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:core="using:OpenToDo.Core" xmlns:app="using:OpenToDo.App" x:Class="OpenToDo.App.MainWindow" Width="1180" Height="800" MinWidth="900" MinHeight="620" Title="OpenToDo">
-  <Grid ColumnDefinitions="230,*">
-    <Border Grid.Column="0" Background="#14161A" Padding="18"><Grid RowDefinitions="Auto,*,Auto">
-      <StackPanel Spacing="7"><TextBlock Text="OpenToDo" FontSize="27" FontWeight="Bold" Foreground="#ECEEF1" Margin="4,2,0,22"/><Button Classes="nav" Content="Home" Click="Home_OnClick"/><Button Classes="nav" Content="Todo" Click="Todo_OnClick"/><Button Classes="nav" Content="Completed" Click="Completed_OnClick"/></StackPanel>
-      <StackPanel Grid.Row="2" Spacing="8"><TextBlock Text="LOCAL-FIRST" FontSize="11" FontWeight="Bold" Foreground="#9AA1AB" Margin="4,0"/><Button Classes="nav" Content="Settings" Click="Settings_OnClick"/></StackPanel>
-    </Grid></Border>
-    <ScrollViewer Grid.Column="1"><Grid Margin="34" RowDefinitions="Auto,*">
-      <Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="5"><TextBlock x:Name="PageTitle" Text="Home" FontSize="32" FontWeight="Bold"/><TextBlock x:Name="PageSubtitle" Text="Your productivity overview." Classes="muted" Foreground="#9AA1AB"/></StackPanel><Button Grid.Column="1" Classes="primary" Content="Make event" Click="NewTask_OnClick" VerticalAlignment="Top"/></Grid>
-      <Grid Grid.Row="1" Margin="0,28,0,0">
-        <StackPanel x:Name="HomePanel" Spacing="18">
-          <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="12">
-            <Border Classes="card stat"><StackPanel><TextBlock Text="Completed" Classes="muted"/><TextBlock x:Name="CompletedTotal" Text="0" Classes="statNumber"/></StackPanel></Border><Border Grid.Column="1" Classes="card stat"><StackPanel><TextBlock Text="Today" Classes="muted"/><TextBlock x:Name="CompletedDay" Text="0" Classes="statNumber"/></StackPanel></Border><Border Grid.Column="2" Classes="card stat"><StackPanel><TextBlock Text="This week" Classes="muted"/><TextBlock x:Name="CompletedWeek" Text="0" Classes="statNumber"/></StackPanel></Border><Border Grid.Column="3" Classes="card stat"><StackPanel><TextBlock Text="This month" Classes="muted"/><TextBlock x:Name="CompletedMonth" Text="0" Classes="statNumber"/></StackPanel></Border><Border Grid.Column="4" Classes="card stat"><StackPanel><TextBlock Text="This year" Classes="muted"/><TextBlock x:Name="CompletedYear" Text="0" Classes="statNumber"/></StackPanel></Border>
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:OpenToDo.App"
+        x:Class="OpenToDo.App.MainWindow"
+        Width="1280" Height="840" MinWidth="880" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
+        Title="OpenToDo">
+
+  <Window.Resources>
+    <!-- Active task row -->
+    <DataTemplate x:Key="ActiveRowTemplate" x:DataType="app:TaskRow">
+      <Border Classes="row" Margin="0,0,0,10">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="14">
+          <Button Classes="check" Click="ToggleCompleted_OnClick" ToolTip.Tip="Mark as done" AutomationProperties.Name="Mark as done">
+            <Path Classes="icon" Data="M5 12.5 L10 17.5 L19 7"/>
+          </Button>
+          <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}" Classes="rowTitle" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding Description}" IsVisible="{Binding HasDescription}" Classes="caption" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+          </StackPanel>
+          <Border Grid.Column="2" Classes="chip" Classes.overdue="{Binding IsOverdue}" Classes.today="{Binding IsDueToday}"
+                  IsVisible="{Binding HasDue}" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="icon" Data="M4 6 H20 V20 H4 Z M4 10 H20 M8 3 V7 M16 3 V7" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding DueText}" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Border>
+          <StackPanel Grid.Column="3" Classes="actions" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+            <Button Classes="ghost" Click="Edit_OnClick" ToolTip.Tip="Edit" AutomationProperties.Name="Edit task">
+              <Path Classes="icon" Data="M4 20 H8 L19 9 L15 5 L4 16 Z"/>
+            </Button>
+            <Button Classes="ghost del" Click="Delete_OnClick" ToolTip.Tip="Delete" AutomationProperties.Name="Delete task">
+              <Path Classes="icon" Data="M5 7 H19 M9 7 V4 H15 V7 M7 7 L8 20 H16 L17 7"/>
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+    <!-- Completed task row -->
+    <DataTemplate x:Key="DoneRowTemplate" x:DataType="app:TaskRow">
+      <Border Classes="row" Margin="0,0,0,10">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+          <Button Classes="check done" Click="Restore_OnClick" ToolTip.Tip="Restore to to-do" AutomationProperties.Name="Restore task">
+            <Path Classes="icon" Data="M5 12.5 L10 17.5 L19 7"/>
+          </Button>
+          <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}" Classes="rowTitle muted" TextDecorations="Strikethrough" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding CompletedText}" Classes="caption"/>
+          </StackPanel>
+          <StackPanel Grid.Column="2" Classes="actions" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+            <Button Classes="ghost" Click="Restore_OnClick" ToolTip.Tip="Restore" AutomationProperties.Name="Restore task">
+              <Path Classes="icon" Data="M9 7 L4 12 L9 17 M4 12 H15 A5 5 0 0 1 15 22"/>
+            </Button>
+            <Button Classes="ghost" Click="Edit_OnClick" ToolTip.Tip="Edit" AutomationProperties.Name="Edit task">
+              <Path Classes="icon" Data="M4 20 H8 L19 9 L15 5 L4 16 Z"/>
+            </Button>
+            <Button Classes="ghost del" Click="Delete_OnClick" ToolTip.Tip="Delete" AutomationProperties.Name="Delete task">
+              <Path Classes="icon" Data="M5 7 H19 M9 7 V4 H15 V7 M7 7 L8 20 H16 L17 7"/>
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </Window.Resources>
+
+  <Grid>
+    <Grid ColumnDefinitions="252,*,Auto">
+
+      <!-- ================= Sidebar ================= -->
+      <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0" Padding="16,22">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <StackPanel Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="11" Margin="6,2,0,24">
+              <Image Width="36" Height="36" Source="{DynamicResource LogoMark}" VerticalAlignment="Center"/>
+              <StackPanel VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="OpenToDo" FontSize="18" FontWeight="SemiBold"/>
+                <TextBlock Text="Plan. Do. Repeat." Classes="caption"/>
+              </StackPanel>
+            </StackPanel>
+
+            <Button x:Name="NavHome" Classes="nav active" Click="Home_OnClick">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Path Classes="icon" Data="M3 11 L12 3 L21 11 M5 9.5 V20 H10 V14 H14 V20 H19 V9.5"/>
+                <TextBlock Grid.Column="1" Text="Home" VerticalAlignment="Center"/>
+              </Grid>
+            </Button>
+            <Button x:Name="NavTodo" Classes="nav" Click="Todo_OnClick">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Path Classes="icon" Data="M9 6 H20 M9 12 H20 M9 18 H20 M4 6 L5 7 L7 5 M4 12 L5 13 L7 11 M4 18 L5 19 L7 17"/>
+                <TextBlock Grid.Column="1" Text="To-do" VerticalAlignment="Center"/>
+                <Border x:Name="TodoBadge" Grid.Column="2" Classes="badge"><TextBlock x:Name="TodoBadgeText" Text="0"/></Border>
+              </Grid>
+            </Button>
+            <Button x:Name="NavCompleted" Classes="nav" Click="Completed_OnClick">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Path Classes="icon" Data="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M8 12 L11 15 L16 9"/>
+                <TextBlock Grid.Column="1" Text="Completed" VerticalAlignment="Center"/>
+                <Border x:Name="DoneBadge" Grid.Column="2" Classes="badge"><TextBlock x:Name="DoneBadgeText" Text="0"/></Border>
+              </Grid>
+            </Button>
+            <Button x:Name="NavAssistant" Classes="nav" Click="ToggleAssistant_OnClick">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Path Classes="icon" Data="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z"/>
+                <TextBlock Grid.Column="1" Text="Assistant" VerticalAlignment="Center"/>
+                <Border Grid.Column="2" Classes="badge"><TextBlock Text="AI" FontSize="10"/></Border>
+              </Grid>
+            </Button>
+          </StackPanel>
+
+          <StackPanel Grid.Row="2" Spacing="10">
+            <Border Classes="card" Padding="14" CornerRadius="14" Background="{DynamicResource SurfaceBrush}">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Local-first" FontWeight="SemiBold" FontSize="13"/>
+                <TextBlock Text="Your tasks are plain files on this device. No account, no cloud." Classes="caption" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+            <Button x:Name="NavSettings" Classes="nav" Click="Settings_OnClick">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Path Classes="icon" Data="M4 7 H20 M4 17 H20 M9 4 V10 M15 14 V20"/>
+                <TextBlock Grid.Column="1" Text="Settings" VerticalAlignment="Center"/>
+              </Grid>
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ================= Main ================= -->
+      <Grid Grid.Column="1" RowDefinitions="Auto,*">
+        <Grid x:Name="HeaderBar" Margin="44,34,44,0" Width="1200" HorizontalAlignment="Center" ColumnDefinitions="*,Auto" ColumnSpacing="16">
+          <StackPanel Spacing="4">
+            <TextBlock x:Name="PageTitle" Classes="h1" Text="Home"/>
+            <TextBlock x:Name="PageSubtitle" Classes="muted" Text=""/>
+          </StackPanel>
+          <Button x:Name="NewTaskButton" Grid.Column="1" Classes="primary" Click="NewTask_OnClick" VerticalAlignment="Top" ToolTip.Tip="New task (Ctrl+N)">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Path Classes="icon" Data="M12 5 V19 M5 12 H19" Width="16" Height="16"/>
+              <TextBlock Text="New task" VerticalAlignment="Center" Foreground="White"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <Grid x:Name="ContentRoot" Margin="44,26,44,44" Width="1200" HorizontalAlignment="Center">
+
+            <!-- ===== HOME ===== -->
+            <StackPanel x:Name="HomePanel" Spacing="20">
+              <Border CornerRadius="18" Background="{DynamicResource HeroGradient}" Padding="26,24">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                    <StackPanel Spacing="8" VerticalAlignment="Center">
+                      <TextBlock x:Name="HeroGreeting" Text="Welcome back" FontSize="26" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap"/>
+                      <TextBlock x:Name="HeroSummary" Text="" Foreground="#AEB9D6" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                      <Border x:Name="StreakChip" Classes="chip streak" HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Path x:Name="StreakFlame" Classes="flame" Data="M12 3 C13.4 7.2 18 8.6 18 13 A6 6 0 0 1 6 13 C6 9.2 10.6 7.6 12 3 Z"/>
+                          <TextBlock x:Name="StreakText" Text="No streak yet" VerticalAlignment="Center"/>
+                        </StackPanel>
+                      </Border>
+                      <TextBlock x:Name="StreakHint" Text="" Foreground="#AEB9D6" FontSize="12" HorizontalAlignment="Right" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Grid>
+              </Border>
+
+              <Border Classes="card">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                  <Border Grid.Column="0" Classes="bubble big violet" Width="52" Height="52" CornerRadius="16" VerticalAlignment="Top">
+                    <Path Classes="icon" Data="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="AI progress report" Classes="h2"/>
+                      <Border Classes="badge"><TextBlock Text="AI" FontSize="10"/></Border>
+                    </StackPanel>
+                    <TextBlock x:Name="HomeInsightText" Classes="muted" TextWrapping="Wrap"
+                               Text="Ask the assistant for a quick read on how you're doing — it looks at your streak, completions and open tasks."/>
+                  </StackPanel>
+                  <Button x:Name="HomeInsightButton" Grid.Column="2" Classes="primary" Content="Summarize" Click="HomeInsight_OnClick" VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+
+              <UniformGrid x:Name="StatGrid" Columns="4" Margin="-7,0">
+                <Border Classes="card" Padding="18" Margin="7">
+                  <StackPanel Spacing="12">
+                    <Border Classes="bubble green"><Path Classes="icon" Data="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M8 12 L11 15 L16 9" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <StackPanel Spacing="2"><TextBlock x:Name="CompletedDay" Text="0" Classes="statNumber"/><TextBlock Text="Done today" Classes="caption"/></StackPanel>
+                  </StackPanel>
+                </Border>
+                <Border Classes="card" Padding="18" Margin="7">
+                  <StackPanel Spacing="12">
+                    <Border Classes="bubble violet"><Path Classes="icon" Data="M4 6 H20 V20 H4 Z M4 10 H20 M8 3 V7 M16 3 V7" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <StackPanel Spacing="2"><TextBlock x:Name="CompletedWeek" Text="0" Classes="statNumber"/><TextBlock Text="This week" Classes="caption"/></StackPanel>
+                  </StackPanel>
+                </Border>
+                <Border Classes="card" Padding="18" Margin="7">
+                  <StackPanel Spacing="12">
+                    <Border Classes="bubble cyan"><Path Classes="icon" Data="M5 20 V12 M12 20 V5 M19 20 V9" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <StackPanel Spacing="2"><TextBlock x:Name="CompletedMonth" Text="0" Classes="statNumber"/><TextBlock Text="This month" Classes="caption"/></StackPanel>
+                  </StackPanel>
+                </Border>
+                <Border Classes="card" Padding="18" Margin="7">
+                  <StackPanel Spacing="12">
+                    <Border Classes="bubble amber"><Path Classes="icon" Data="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <StackPanel Spacing="2"><TextBlock x:Name="CompletedYear" Text="0" Classes="statNumber"/><TextBlock x:Name="CompletedTotalCaption" Text="This year" Classes="caption"/></StackPanel>
+                  </StackPanel>
+                </Border>
+              </UniformGrid>
+
+              <Border Classes="card">
+                <StackPanel Spacing="18">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="3">
+                      <TextBlock Text="Completion activity" Classes="h2"/>
+                      <TextBlock x:Name="ChartSubtitle" Text="Last 14 days" Classes="caption"/>
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="segmented" VerticalAlignment="Top">
+                      <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Button x:Name="GraphModeButton" Classes="seg active" Content="Graph" Click="GraphMode_OnClick"/>
+                        <Button x:Name="NumberModeButton" Classes="seg" Content="Numbers" Click="NumberMode_OnClick"/>
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+                  <Grid>
+                    <ItemsControl x:Name="DailyChart">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="app:AnalyticsBar">
+                          <Grid RowDefinitions="150,Auto" Margin="3,0">
+                            <StackPanel VerticalAlignment="Bottom" Spacing="5">
+                              <TextBlock Text="{Binding CountText}" Classes="caption" HorizontalAlignment="Center"/>
+                              <Border Classes="bar" Classes.today="{Binding IsToday}" Classes.zero="{Binding IsEmpty}" Height="{Binding BarHeight}"/>
+                            </StackPanel>
+                            <TextBlock Grid.Row="1" Text="{Binding Label}" Classes="dayLabel" Classes.today="{Binding IsToday}" Margin="0,8,0,0"/>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl x:Name="DailyNumbers" IsVisible="False">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="app:AnalyticsBar">
+                          <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="4,10">
+                            <Grid ColumnDefinitions="*,Auto">
+                              <TextBlock Text="{Binding FullLabel}" Classes="muted"/>
+                              <TextBlock Grid.Column="1" Text="{Binding Count}" FontWeight="SemiBold"/>
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="Up next" Classes="h2"/>
+                  <TextBlock Text="Your next five open tasks, soonest due first." Classes="caption"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="View all" Click="Todo_OnClick" VerticalAlignment="Top"/>
+              </Grid>
+              <StackPanel>
+                <ItemsControl x:Name="TaskList" ItemTemplate="{StaticResource ActiveRowTemplate}"/>
+                <Border x:Name="HomeEmpty" Classes="card" Padding="36" IsVisible="False">
+                  <StackPanel Spacing="10" HorizontalAlignment="Center">
+                    <Border Classes="bubble big violet" HorizontalAlignment="Center"><Path Classes="icon" Data="M5 12.5 L10 17.5 L19 7" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <TextBlock Text="You're all caught up" Classes="h2" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Nothing open right now. Add a task to get rolling." Classes="muted" HorizontalAlignment="Center" TextAlignment="Center"/>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </StackPanel>
+
+            <!-- ===== TODO ===== -->
+            <StackPanel x:Name="TodoPanel" Spacing="16" IsVisible="False">
+              <Grid ColumnDefinitions="*,280" ColumnSpacing="14">
+                <Border Classes="card" Padding="6,4" CornerRadius="14">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                    <Border Classes="bubble violet" Width="34" Height="34" Margin="4">
+                      <Path Classes="icon" Data="M12 5 V19 M5 12 H19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBox x:Name="QuickAddBox" Grid.Column="1" Classes="bare" PlaceholderText="Quick add: type a task and press Enter" MaxLength="120" KeyDown="QuickAdd_OnKeyDown"/>
+                  </Grid>
+                </Border>
+                <TextBox x:Name="SearchBox" Grid.Column="1" PlaceholderText="Search tasks…" MaxLength="120" VerticalAlignment="Center" MinHeight="48" CornerRadius="14"/>
+              </Grid>
+              <TextBlock x:Name="TodoCountLabel" Classes="caption" Margin="4,4,0,0"/>
+              <StackPanel>
+                <ItemsControl x:Name="TodoList" ItemTemplate="{StaticResource ActiveRowTemplate}"/>
+                <Border x:Name="TodoEmpty" Classes="card" Padding="36" IsVisible="False">
+                  <StackPanel Spacing="10" HorizontalAlignment="Center">
+                    <Border Classes="bubble big cyan" HorizontalAlignment="Center"><Path Classes="icon" Data="M11 4 A7 7 0 1 0 11 18 A7 7 0 1 0 11 4 M16 16 L21 21" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <TextBlock x:Name="TodoEmptyTitle" Text="Nothing to do" Classes="h2" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="TodoEmptyText" Text="Use quick add above or press Ctrl+N." Classes="muted" HorizontalAlignment="Center" TextAlignment="Center"/>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </StackPanel>
+
+            <!-- ===== COMPLETED ===== -->
+            <StackPanel x:Name="CompletedPanel" Spacing="16" IsVisible="False">
+              <TextBlock x:Name="DoneCountLabel" Classes="caption" Margin="4,0,0,0"/>
+              <StackPanel>
+                <ItemsControl x:Name="CompletedList" ItemTemplate="{StaticResource DoneRowTemplate}"/>
+                <Border x:Name="CompletedEmpty" Classes="card" Padding="36" IsVisible="False">
+                  <StackPanel Spacing="10" HorizontalAlignment="Center">
+                    <Border Classes="bubble big green" HorizontalAlignment="Center"><Path Classes="icon" Data="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M8 12 L11 15 L16 9" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <TextBlock Text="No completed tasks yet" Classes="h2" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Finished tasks land here so you can look back on them." Classes="muted" HorizontalAlignment="Center" TextAlignment="Center"/>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </StackPanel>
+
+            <!-- ===== SETTINGS ===== -->
+            <StackPanel x:Name="SettingsPanel" Spacing="18" IsVisible="False">
+              <Border Classes="card" Padding="26">
+                <StackPanel Spacing="18">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="Profile" Classes="h2"/>
+                    <TextBlock Text="Your name is saved locally in settings.json and used to greet you." Classes="muted" TextWrapping="Wrap"/>
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Classes="fieldLabel" Text="Username"/>
+                    <TextBox x:Name="UsernameBox" MaxLength="40" PlaceholderText="How should we greet you?"/>
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="SaveProfileButton" Classes="primary" Content="Save profile" Click="SaveProfile_OnClick"/>
+                    <Button Content="Replay tutorial" Click="ReplayTutorial_OnClick"/>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card" Padding="26">
+                <StackPanel Spacing="20">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="AI providers" Classes="h2"/>
+                    <TextBlock Text="Connect a provider, load its current model list, and try it out. The assistant uses this configuration." Classes="muted" TextWrapping="Wrap"/>
+                  </StackPanel>
+
+                  <StackPanel>
+                    <TextBlock Classes="fieldLabel" Text="Provider"/>
+                    <ComboBox x:Name="ProviderCombo" SelectedIndex="0" SelectionChanged="Provider_OnSelectionChanged">
+                      <ComboBoxItem Content="OpenAI"/>
+                      <ComboBoxItem Content="Groq"/>
+                      <ComboBoxItem Content="OpenRouter"/>
+                    </ComboBox>
+                  </StackPanel>
+
+                  <StackPanel>
+                    <TextBlock Classes="fieldLabel" Text="API key"/>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <TextBox x:Name="ApiKeyBox" PasswordChar="●" PlaceholderText="Stored in the OS credential store"/>
+                      <Button Grid.Column="1" Classes="ghost" Click="ToggleKey_OnClick" ToolTip.Tip="Show or hide key" AutomationProperties.Name="Show or hide key" Height="40" Width="40">
+                        <Path Classes="icon" Data="M2 12 C5 6 9 5 12 5 C15 5 19 6 22 12 C19 18 15 19 12 19 C9 19 5 18 2 12 Z M12 9 A3 3 0 1 0 12 15 A3 3 0 1 0 12 9"/>
+                      </Button>
+                    </Grid>
+                  </StackPanel>
+
+                  <StackPanel>
+                    <TextBlock Classes="fieldLabel" Text="Model"/>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <ComboBox x:Name="ModelComboBox" PlaceholderText="Fetch models, then choose one" MaxDropDownHeight="320"/>
+                      <Button x:Name="FetchButton" Grid.Column="1" Content="Fetch models" Click="FetchModels_OnClick" MinHeight="40"/>
+                    </Grid>
+                  </StackPanel>
+
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                    <StackPanel>
+                      <TextBlock Classes="fieldLabel" Text="Temperature"/>
+                      <NumericUpDown x:Name="TemperatureBox" Minimum="0" Maximum="2" Increment="0.1" FormatString="0.0"/>
+                      <TextBlock x:Name="TemperatureHint" Classes="caption" Margin="2,6,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Classes="fieldLabel" Text="Max output tokens"/>
+                      <NumericUpDown x:Name="MaxOutputTokensBox" Minimum="1" Maximum="131072" Increment="128" FormatString="0"/>
+                    </StackPanel>
+                  </Grid>
+
+                  <StackPanel>
+                    <TextBlock Classes="fieldLabel" Text="Test prompt"/>
+                    <TextBox x:Name="AiPromptBox" AcceptsReturn="True" Height="86" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                             Text="Give me three concise ways to organize today's tasks."/>
+                  </StackPanel>
+
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="SaveButton" Classes="primary" Content="Save settings" Click="SaveSettings_OnClick"/>
+                    <Button x:Name="TestButton" Content="Test AI" Click="TestAi_OnClick"/>
+                    <Button x:Name="CancelAiButton" Classes="danger" Content="Cancel request" Click="CancelAi_OnClick" IsVisible="False"/>
+                  </StackPanel>
+
+                  <TextBlock x:Name="AiStatus" Classes="status" Text="No provider configured yet." TextWrapping="Wrap"/>
+
+                  <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="12" Padding="16">
+                    <SelectableTextBlock x:Name="AiOutput" Text="AI test output will appear here." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/>
+                  </Border>
+
+                  <TextBlock Text="API keys are never written to settings.json. OpenToDo stores them in your operating system's credential store."
+                             Classes="caption" TextWrapping="Wrap"/>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+
           </Grid>
-          <Border Classes="card" Padding="18"><Grid RowDefinitions="Auto,*"><Grid ColumnDefinitions="*,Auto"><StackPanel><TextBlock Text="Completion activity" FontSize="19" FontWeight="SemiBold"/><TextBlock x:Name="ChartSubtitle" Text="Last 14 days" Classes="muted"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"><Button Classes="chart-toggle" Content="Graph" Click="GraphMode_OnClick"/><Button Classes="chart-toggle" Content="Numbers" Click="NumberMode_OnClick"/></StackPanel></Grid>
-            <Grid Grid.Row="1" Margin="0,16,0,0"><StackPanel x:Name="GraphPanel"><ItemsControl x:Name="DailyChart"><ItemsControl.ItemTemplate><DataTemplate x:DataType="app:AnalyticsBar"><Grid ColumnDefinitions="48,*,Auto" Margin="0,3"><TextBlock Text="{Binding Label}" Classes="muted" VerticalAlignment="Center"/><Border Grid.Column="1" Height="12" Width="{Binding Width}" MaxWidth="760" CornerRadius="6" Background="#66708C" HorizontalAlignment="Left" VerticalAlignment="Center"/><TextBlock Grid.Column="2" Text="{Binding Count}" Margin="10,0,0,0" FontWeight="SemiBold"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel>
-              <StackPanel x:Name="NumberPanel" IsVisible="False"><ItemsControl x:Name="DailyNumbers"><ItemsControl.ItemTemplate><DataTemplate x:DataType="app:AnalyticsBar"><Border Padding="10,7"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Label}"/><TextBlock Grid.Column="1" Text="{Binding Count}" FontWeight="Bold"/></Grid></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></Grid>
-          </Grid></Border>
-          <Grid ColumnDefinitions="*,Auto"><StackPanel><TextBlock Text="Recent tasks" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="Your next five active tasks." Classes="muted"/></StackPanel><Button Grid.Column="1" Content="View all" Click="Todo_OnClick"/></Grid>
-          <ListBox x:Name="TaskList"><ListBox.ItemTemplate><DataTemplate x:DataType="core:TaskItem"><Border Classes="card task-row" Padding="10" Margin="0,0,0,7"><Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10"><Button Classes="check" FontFamily="Segoe UI Symbol" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="☐" Click="ToggleCompleted_OnClick"/><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"><TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/><TextBlock Text="{Binding DueDate, StringFormat='Due {0:MMM d}'}" Classes="muted" VerticalAlignment="Center"/><TextBlock Text="{Binding Description}" Classes="muted" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/></StackPanel><Button Grid.Column="2" Classes="subtle" Content="Edit" Click="Edit_OnClick"/><Button Grid.Column="3" Classes="danger" Content="Delete" Click="Delete_OnClick"/></Grid></Border></DataTemplate></ListBox.ItemTemplate></ListBox></StackPanel>
-        <StackPanel x:Name="TodoPanel" Spacing="12" IsVisible="False"><Button Classes="primary" Content="Make event" Click="NewTask_OnClick" HorizontalAlignment="Left"/><ListBox x:Name="TodoList"><ListBox.ItemTemplate><DataTemplate x:DataType="core:TaskItem"><Border Classes="card task-row" Padding="10" Margin="0,0,0,7"><Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10"><Button Classes="check" Content="☐" Click="ToggleCompleted_OnClick"/><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"><TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/><TextBlock Text="{Binding DueDate, StringFormat='Due {0:MMM d}'}" Classes="muted" VerticalAlignment="Center"/><TextBlock Text="{Binding Description}" Classes="muted" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/></StackPanel><Button Grid.Column="2" Classes="subtle" Content="Edit" Click="Edit_OnClick"/><Button Grid.Column="3" Classes="danger" Content="Delete" Click="Delete_OnClick"/></Grid></Border></DataTemplate></ListBox.ItemTemplate></ListBox></StackPanel>
-        <StackPanel x:Name="CompletedPanel" Spacing="12" IsVisible="False"><TextBlock Text="Completed archive" FontSize="20" FontWeight="SemiBold"/><ListBox x:Name="CompletedList"><ListBox.ItemTemplate><DataTemplate x:DataType="core:TaskItem"><Border Classes="card task-row" Padding="10" Margin="0,0,0,7"><Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10"><Button Classes="check completed-check" FontFamily="Segoe UI Symbol" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="✓"/><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"><TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/><TextBlock Text="{Binding CompletionHistory.Count, StringFormat='Completions: {0}'}" Classes="muted" VerticalAlignment="Center"/></StackPanel><Button Grid.Column="2" Classes="subtle" Content="Edit" Click="Edit_OnClick"/><Button Grid.Column="3" Classes="restore" Content="Restore" Click="Restore_OnClick"/></Grid></Border></DataTemplate></ListBox.ItemTemplate></ListBox></StackPanel><StackPanel x:Name="SettingsPanel" Spacing="16" IsVisible="False"><Border Classes="card" Padding="22"><StackPanel Spacing="14"><StackPanel><TextBlock Text="AI providers" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="Connect a provider, fetch its current model catalog, and test the connection." Classes="muted" Foreground="#6B7280" TextWrapping="Wrap"/></StackPanel>
-          <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="11" ColumnSpacing="14"><TextBlock Text="Provider" VerticalAlignment="Center"/><ComboBox Grid.Column="1" x:Name="ProviderCombo" SelectedIndex="0" SelectionChanged="Provider_OnSelectionChanged"><ComboBoxItem Content="OpenAI"/><ComboBoxItem Content="Groq"/><ComboBoxItem Content="OpenRouter"/></ComboBox><TextBlock Grid.Row="1" Text="API key" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" x:Name="ApiKeyBox" PasswordChar="●" PlaceholderText="Stored in the OS credential store"/><TextBlock Grid.Row="2" Text="Model" VerticalAlignment="Center"/><ComboBox Grid.Row="2" Grid.Column="1" x:Name="ModelComboBox" PlaceholderText="Fetch models, then choose one" MaxDropDownHeight="300"/><TextBlock Grid.Row="3" Text="Temperature" VerticalAlignment="Center"/><NumericUpDown Grid.Row="3" Grid.Column="1" x:Name="TemperatureBox" Minimum="0" Maximum="2" Increment="0.1" FormatString="0.0"/><TextBlock Grid.Row="4" Text="Max output tokens" VerticalAlignment="Center"/><NumericUpDown Grid.Row="4" Grid.Column="1" x:Name="MaxOutputTokensBox" Minimum="1" Maximum="131072" Increment="128"/><TextBlock Grid.Row="5" Text="AI test prompt" VerticalAlignment="Top"/><TextBox Grid.Row="5" Grid.Column="1" x:Name="AiPromptBox" AcceptsReturn="True" Height="80" Text="Give me three concise ways to organize today's tasks." TextWrapping="Wrap"/><StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Spacing="8"><Button Classes="primary" Content="Fetch models" Click="FetchModels_OnClick"/><Button Content="Save settings" Click="SaveSettings_OnClick"/><Button Content="Test AI" Click="TestAi_OnClick"/></StackPanel></Grid>
-          <TextBlock x:Name="AiStatus" Classes="muted" Text="No provider configured yet." TextWrapping="Wrap"/><Border Background="#292C32" Padding="12" CornerRadius="8"><TextBlock x:Name="AiOutput" Text="AI test output will appear here." Foreground="#ECEEF1" TextWrapping="Wrap"/></Border><TextBlock Text="API keys are never written to settings.json. OpenToDo stores them using the native OS credential/keyring system." Classes="muted" TextWrapping="Wrap"/>
-        </StackPanel></Border></StackPanel>
+        </ScrollViewer>
       </Grid>
+
+      <!-- ================= AI assistant sidebar ================= -->
+      <Border x:Name="AiSidebar" Grid.Column="2" Width="380" MinWidth="300" IsVisible="False"
+              Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1,0,0,0">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <Border Grid.Row="0" Padding="18,20" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+              <Image Width="30" Height="30" Source="{DynamicResource LogoMark}" VerticalAlignment="Center"/>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="AI assistant" FontWeight="SemiBold"/>
+                <TextBlock x:Name="AiSidebarStatus" Classes="caption" TextWrapping="Wrap"/>
+              </StackPanel>
+              <Button Grid.Column="2" Classes="ghost" Click="CloseAssistant_OnClick" ToolTip.Tip="Close assistant" AutomationProperties.Name="Close assistant">
+                <Path Classes="icon" Data="M6 6 L18 18 M18 6 L6 18"/>
+              </Button>
+            </Grid>
+          </Border>
+
+          <ScrollViewer Grid.Row="1" x:Name="ChatScroll" VerticalScrollBarVisibility="Auto" Padding="16">
+            <StackPanel x:Name="ChatList" Spacing="8"/>
+          </ScrollViewer>
+
+          <Border Grid.Row="2" Padding="16" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Spacing="10">
+              <TextBox x:Name="ChatInput" AcceptsReturn="True" Height="80" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                       PlaceholderText="Ask me to add, finish or reschedule tasks…" KeyDown="ChatInput_OnKeyDown"/>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock x:Name="ChatHint" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <Button x:Name="ChatSendButton" Grid.Column="1" Classes="primary" Content="Send" Click="ChatSend_OnClick"/>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
     </Grid>
-    </ScrollViewer>
+
+    <!-- ================= Toast ================= -->
+    <Border x:Name="ToastHost" Classes="toast" IsVisible="False" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" MaxWidth="640">
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <Path x:Name="ToastIcon" Classes="icon" Data="M5 12.5 L10 17.5 L19 7" VerticalAlignment="Center"/>
+        <TextBlock x:Name="ToastText" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560"/>
+      </StackPanel>
+    </Border>
+
+    <!-- ================= Onboarding / tutorial ================= -->
+    <Grid x:Name="OnboardingOverlay" IsVisible="False" Background="{DynamicResource OverlayBrush}">
+      <Border Classes="onboard" Width="620" MaxWidth="620" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="14">
+            <Image Width="40" Height="40" Source="{DynamicResource LogoMark}" VerticalAlignment="Center"/>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="OpenToDo" FontSize="17" FontWeight="SemiBold"/>
+              <TextBlock x:Name="OnboardStepLabel" Classes="caption" Text="Step 1 of 6"/>
+            </StackPanel>
+          </StackPanel>
+
+          <Grid Grid.Row="1" Margin="0,26,0,24" MinHeight="236">
+            <StackPanel x:Name="OnboardUsernameStep" Spacing="14">
+              <TextBlock Text="Welcome" Classes="h2"/>
+              <TextBlock Text="Let's set things up. What should we call you? Your name is stored locally in settings.json and used to greet you across the app."
+                         Classes="muted" TextWrapping="Wrap"/>
+              <TextBox x:Name="OnboardUsernameBox" MaxLength="40" PlaceholderText="e.g. Alex" KeyDown="OnboardUsername_OnKeyDown"/>
+              <TextBlock x:Name="OnboardError" Classes="formError" IsVisible="False" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <StackPanel x:Name="OnboardTutorialStep" Spacing="16" IsVisible="False">
+              <Border Classes="iconTile">
+                <Path x:Name="OnboardIcon" Classes="icon" Data="M3 11 L12 3 L21 11 M5 9.5 V20 H10 V14 H14 V20 H19 V9.5"/>
+              </Border>
+              <TextBlock x:Name="OnboardTitle" Classes="h2" Text="Home" TextWrapping="Wrap"/>
+              <TextBlock x:Name="OnboardBody" Classes="muted" TextWrapping="Wrap" Text=""/>
+            </StackPanel>
+          </Grid>
+
+          <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+            <Button x:Name="OnboardBackButton" Content="Back" Click="OnboardBack_OnClick" IsVisible="False"/>
+            <Button x:Name="OnboardSkipButton" Grid.Column="2" Content="Skip tour" Click="OnboardSkip_OnClick" IsVisible="False"/>
+            <Button x:Name="OnboardNextButton" Grid.Column="3" Classes="primary" Content="Continue" Click="OnboardNext_OnClick"/>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
   </Grid>
 </Window>

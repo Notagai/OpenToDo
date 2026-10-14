@@ -1,19 +1,26 @@
 # OpenToDo
 
-OpenToDo is a cross-platform, local-first to-do application built with C#/.NET 8 and Avalonia.
+A free, local-first to-do app with optional AI providers, built with C# / .NET 8 and Avalonia.
 
-## Current features
-- Home analytics for today, this week, this month, and this year.
-- Graph / exact-number analytics toggle.
-- Create, edit, complete, restore, and permanently delete tasks.
-- Optional descriptions and due dates.
-- Local JSON task storage.
-- Fluent desktop UI for Windows, macOS, and Linux.
-- OpenAI, Groq, and OpenRouter settings with live model fetching.
-- In-app AI connection test.
-- API keys stored in the native OS credential/keyring system rather than settings.json.
+- **Local-first:** every task is a plain JSON file under `%LOCALAPPDATA%/OpenToDo/tasks` (or the platform equivalent).
+- **First run:** a short welcome + tutorial asks for your username. It is saved to `settings.json` (created on first launch) and used to greet you; you can change it any time in Settings.
+- **Home dashboard:** personalised greeting, completion streak with a flame that lights up, day/week/month/year stats, a 14-day activity chart and a one-click AI progress report.
+- **Fast capture:** quick-add bar, `Ctrl+N` for the full editor, due-date shortcuts, search.
+- **AI (optional):** OpenAI, Groq and OpenRouter. A collapsible sidebar assistant can add, complete, reschedule and delete tasks for you, and summarise how you're doing. API keys live in the OS credential store, never in `settings.json`.
 
-## Development
-Open OpenToDo.sln in Visual Studio with the Avalonia extension installed, then build and run the application.
+## Build & test
 
-Avalonia 12 uses compiled bindings by default. Typed DataTemplate bindings are used for task and chart objects.
+```bash
+dotnet build OpenToDo.sln
+dotnet test
+dotnet run --project src/OpenToDo.App
+```
+
+## Layout
+
+| Project | Purpose |
+|---|---|
+| `OpenToDo.Core` | Task model, ordering/completion rules, analytics |
+| `OpenToDo.Data` | Crash-safe JSON repository |
+| `OpenToDo.Plugins` | AI client + settings/keyring store |
+| `OpenToDo.App` | Avalonia desktop UI |

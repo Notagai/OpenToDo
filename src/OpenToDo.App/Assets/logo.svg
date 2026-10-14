@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" role="img" aria-label="OpenToDo">
+  <title>OpenToDo</title>
+  <defs>
+    <linearGradient id="plate" x1="5" y1="3" x2="27" y2="29" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6"/>
+      <stop offset="0.55" stop-color="#6F72F2"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded-square plate -->
+  <path d="M11 2 H21 A9 9 0 0 1 30 11 V21 A9 9 0 0 1 21 30 H11 A9 9 0 0 1 2 21 V11 A9 9 0 0 1 11 2 Z" fill="url(#plate)"/>
+
+  <!-- Check mark -->
+  <path d="M8.6 16.4 L13.2 21 L22.4 10.6" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Spark: a nod to the optional AI assistant -->
+  <path d="M26 3.2 L26.5 5.3 L28.6 5.8 L26.5 6.3 L26 8.4 L25.5 6.3 L23.4 5.8 L25.5 5.3 Z" fill="#FFD27A"/>
+</svg>

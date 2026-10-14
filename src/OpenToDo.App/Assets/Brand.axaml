@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Brand mark. This dictionary is the app-side rendering of Assets/logo.svg - keep the two in sync.
+    Avalonia has no built-in SVG renderer, so the mark is expressed as vector drawings that are
+    resolved through the asset system instead of pulling in a third-party SVG package.
+  -->
+
+  <LinearGradientBrush x:Key="LogoPlateBrush" StartPoint="16%,9%" EndPoint="84%,91%">
+    <GradientStop Color="#8B5CF6" Offset="0"/>
+    <GradientStop Color="#6F72F2" Offset="0.55"/>
+    <GradientStop Color="#22D3EE" Offset="1"/>
+  </LinearGradientBrush>
+
+  <SolidColorBrush x:Key="LogoSparkBrush" Color="#FFD27A"/>
+
+  <!-- Full colour mark: plate + check + spark. -->
+  <DrawingImage x:Key="LogoMark">
+    <DrawingGroup>
+      <GeometryDrawing Brush="{StaticResource LogoPlateBrush}"
+                       Geometry="M11 2 H21 A9 9 0 0 1 30 11 V21 A9 9 0 0 1 21 30 H11 A9 9 0 0 1 2 21 V11 A9 9 0 0 1 11 2 Z"/>
+      <GeometryDrawing Geometry="M8.6 16.4 L13.2 21 L22.4 10.6">
+        <GeometryDrawing.Pen>
+          <Pen Brush="#FFFFFF" Thickness="3.2" LineCap="Round" LineJoin="Round"/>
+        </GeometryDrawing.Pen>
+      </GeometryDrawing>
+      <GeometryDrawing Brush="{StaticResource LogoSparkBrush}"
+                       Geometry="M26 3.2 L26.5 5.3 L28.6 5.8 L26.5 6.3 L26 8.4 L25.5 6.3 L23.4 5.8 L25.5 5.3 Z"/>
+    </DrawingGroup>
+  </DrawingImage>
+
+  <!-- Monochrome mark for busy/gradient backgrounds. -->
+  <DrawingImage x:Key="LogoMarkLight">
+    <DrawingGroup>
+      <GeometryDrawing Geometry="M8.6 16.4 L13.2 21 L22.4 10.6">
+        <GeometryDrawing.Pen>
+          <Pen Brush="#FFFFFF" Thickness="3.2" LineCap="Round" LineJoin="Round"/>
+        </GeometryDrawing.Pen>
+      </GeometryDrawing>
+      <GeometryDrawing Brush="{StaticResource LogoSparkBrush}"
+                       Geometry="M26 3.2 L26.5 5.3 L28.6 5.8 L26.5 6.3 L26 8.4 L25.5 6.3 L23.4 5.8 L25.5 5.3 Z"/>
+    </DrawingGroup>
+  </DrawingImage>
+
+</ResourceDictionary>
