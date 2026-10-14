@@ -86,6 +86,49 @@ public sealed class AiClient
             : await GenerateChatCompletionAsync(provider, apiKey, model.Trim(), prompt, temperature, maxOutputTokens, cancellationToken);
     }
 
+    /// <summary>
+    /// Multi-turn variant used by the in-app assistant: sends a role/content conversation and returns the reply text.
+    /// OpenAI uses the Responses API, the other providers use the OpenAI-compatible chat-completions shape.
+    /// </summary>
+    public async Task<string> GenerateChatAsync(
+        AiProvider provider,
+        string apiKey,
+        string model,
+        IReadOnlyList<AiPromptMessage> messages,
+        double temperature,
+        int maxOutputTokens,
+        CancellationToken cancellationToken = default)
+    {
+        apiKey = ValidateKey(apiKey);
+        if (string.IsNullOrWhiteSpace(model))
+            throw new InvalidOperationException("Select a model first.");
+        if (messages is null || messages.Count == 0 || messages.All(m => string.IsNullOrWhiteSpace(m.Content)))
+            throw new InvalidOperationException("Enter a prompt.");
+
+        temperature = double.IsNaN(temperature) ? 0.7 : Math.Clamp(temperature, 0, 2);
+        maxOutputTokens = Math.Clamp(maxOutputTokens, 1, AiSettings.MaxTokenLimit);
+        model = model.Trim();
+
+        var mapped = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray();
+
+        object payload;
+        if (provider == AiProvider.OpenAI)
+            payload = new { model, input = mapped, max_output_tokens = Math.Max(16, maxOutputTokens), store = false };
+        else if (provider == AiProvider.Groq)
+            payload = new { model, messages = mapped, temperature, max_completion_tokens = maxOutputTokens };
+        else
+            payload = new { model, messages = mapped, temperature, max_tokens = maxOutputTokens };
+
+        var uri = provider == AiProvider.OpenAI ? "https://api.openai.com/v1/responses" : GetChatUri(provider);
+        using var request = BuildJsonRequest(uri, apiKey, payload);
+        var body = await ExecuteAsync(request, cancellationToken);
+        using var document = ParseBody(body);
+
+        return provider == AiProvider.OpenAI
+            ? ParseOpenAiText(document.RootElement)
+            : ParseChatText(document.RootElement);
+    }
+
     private async Task<string> GenerateOpenAiAsync(string apiKey, string model, string prompt, int maxOutputTokens, CancellationToken cancellationToken)
     {
         var payload = new
@@ -100,8 +143,11 @@ public sealed class AiClient
         using var request = BuildJsonRequest("https://api.openai.com/v1/responses", apiKey, payload);
         var body = await ExecuteAsync(request, cancellationToken);
         using var document = ParseBody(body);
-        var root = document.RootElement;
+        return ParseOpenAiText(document.RootElement);
+    }
 
+    private static string ParseOpenAiText(JsonElement root)
+    {
         if (root.ValueKind == JsonValueKind.Object &&
             root.TryGetProperty("output_text", out var outputText) &&
             outputText.ValueKind == JsonValueKind.String &&
@@ -170,8 +216,11 @@ public sealed class AiClient
         using var request = BuildJsonRequest(GetChatUri(provider), apiKey, payload);
         var body = await ExecuteAsync(request, cancellationToken);
         using var document = ParseBody(body);
-        var root = document.RootElement;
+        return ParseChatText(document.RootElement);
+    }
 
+    private static string ParseChatText(JsonElement root)
+    {
         // Some gateways (OpenRouter) answer HTTP 200 with an error object in the body.
         if (root.ValueKind == JsonValueKind.Object &&
             !root.TryGetProperty("choices", out _) &&

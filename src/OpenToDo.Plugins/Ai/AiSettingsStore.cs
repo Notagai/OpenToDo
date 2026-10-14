@@ -15,6 +15,12 @@ public sealed class AiSettingsStore
     public AiSettingsStore(string? path = null) =>
         _path = path ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenToDo", "settings.json");
 
+    /// <summary>Full path of the settings file this store reads and writes.</summary>
+    public string FilePath => _path;
+
+    /// <summary>Whether settings.json exists on disk yet (false on a brand-new install).</summary>
+    public bool Exists => File.Exists(_path);
+
     /// <summary>Set when the last load had to recover from a problem (corrupt file, keyring unavailable...).</summary>
     public string? LoadWarning { get; private set; }
 
@@ -104,6 +110,8 @@ public sealed class AiSettingsStore
 
         var persisted = new AiSettings
         {
+            Username = settings.Username,
+            OnboardingCompleted = settings.OnboardingCompleted,
             OpenAiModel = settings.OpenAiModel,
             GroqModel = settings.GroqModel,
             OpenRouterModel = settings.OpenRouterModel,

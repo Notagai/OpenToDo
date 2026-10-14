@@ -6,6 +6,10 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Ship the logo asset (avalonia-resource: avares://OpenToDo.App/Assets/logo.svg). -->
+    <AvaloniaResource Include="Assets/logo.svg" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.0" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.0" />

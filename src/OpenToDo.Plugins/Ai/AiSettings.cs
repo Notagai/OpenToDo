@@ -5,6 +5,13 @@ namespace OpenToDo.Plugins.Ai;
 public sealed class AiSettings
 {
     public const int MaxTokenLimit = 131072;
+    public const int MaxUsernameLength = 40;
+
+    /// <summary>The user's display name. Stored locally in settings.json and used for greetings.</summary>
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>True once the welcome flow and tutorial have been completed (or skipped).</summary>
+    public bool OnboardingCompleted { get; set; }
 
     [JsonIgnore]
     public string OpenAiApiKey { get; set; } = string.Empty;
@@ -26,6 +33,9 @@ public sealed class AiSettings
     {
         Temperature = double.IsNaN(Temperature) || double.IsInfinity(Temperature) ? 0.7 : Math.Clamp(Temperature, 0, 2);
         MaxOutputTokens = Math.Clamp(MaxOutputTokens, 1, MaxTokenLimit);
+        Username = (Username ?? string.Empty).Trim();
+        if (Username.Length > MaxUsernameLength)
+            Username = Username[..MaxUsernameLength];
         OpenAiModel ??= string.Empty;
         GroqModel ??= string.Empty;
         OpenRouterModel ??= string.Empty;

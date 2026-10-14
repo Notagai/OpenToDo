@@ -2,8 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:OpenToDo.App"
         x:Class="OpenToDo.App.MainWindow"
-        Width="1220" Height="820" MinWidth="960" MinHeight="640"
+        Width="1280" Height="840" MinWidth="880" MinHeight="600"
         WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
         Title="OpenToDo">
 
   <Window.Resources>
@@ -65,19 +66,16 @@
   </Window.Resources>
 
   <Grid>
-    <Grid ColumnDefinitions="252,*">
+    <Grid ColumnDefinitions="252,*,Auto">
 
       <!-- ================= Sidebar ================= -->
       <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0" Padding="16,22">
         <Grid RowDefinitions="Auto,*,Auto">
           <StackPanel Spacing="6">
-            <StackPanel Orientation="Horizontal" Spacing="12" Margin="8,0,0,26">
-              <Border Width="38" Height="38" CornerRadius="12" Background="{DynamicResource AccentGradient}">
-                <Path Data="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z" Stroke="White" StrokeThickness="1.8"
-                      StrokeJoin="Round" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-              </Border>
-              <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="OpenToDo" FontSize="19" FontWeight="SemiBold"/>
+            <StackPanel Orientation="Horizontal" Spacing="11" Margin="6,2,0,24">
+              <Image Width="36" Height="36" Source="{DynamicResource LogoMark}" VerticalAlignment="Center"/>
+              <StackPanel VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="OpenToDo" FontSize="18" FontWeight="SemiBold"/>
                 <TextBlock Text="Plan. Do. Repeat." Classes="caption"/>
               </StackPanel>
             </StackPanel>
@@ -102,9 +100,16 @@
                 <Border x:Name="DoneBadge" Grid.Column="2" Classes="badge"><TextBlock x:Name="DoneBadgeText" Text="0"/></Border>
               </Grid>
             </Button>
+            <Button x:Name="NavAssistant" Classes="nav" Click="ToggleAssistant_OnClick">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Path Classes="icon" Data="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z"/>
+                <TextBlock Grid.Column="1" Text="Assistant" VerticalAlignment="Center"/>
+                <Border Grid.Column="2" Classes="badge"><TextBlock Text="AI" FontSize="10"/></Border>
+              </Grid>
+            </Button>
           </StackPanel>
 
-          <StackPanel Grid.Row="2" Spacing="12">
+          <StackPanel Grid.Row="2" Spacing="10">
             <Border Classes="card" Padding="14" CornerRadius="14" Background="{DynamicResource SurfaceBrush}">
               <StackPanel Spacing="4">
                 <TextBlock Text="Local-first" FontWeight="SemiBold" FontSize="13"/>
@@ -123,7 +128,7 @@
 
       <!-- ================= Main ================= -->
       <Grid Grid.Column="1" RowDefinitions="Auto,*">
-        <Grid Margin="44,34,44,0" ColumnDefinitions="*,Auto">
+        <Grid x:Name="HeaderBar" Margin="44,34,44,0" Width="1200" HorizontalAlignment="Center" ColumnDefinitions="*,Auto" ColumnSpacing="16">
           <StackPanel Spacing="4">
             <TextBlock x:Name="PageTitle" Classes="h1" Text="Home"/>
             <TextBlock x:Name="PageSubtitle" Classes="muted" Text=""/>
@@ -137,62 +142,75 @@
         </Grid>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <Grid Margin="44,26,44,44" MaxWidth="1060" HorizontalAlignment="Stretch">
+          <Grid x:Name="ContentRoot" Margin="44,26,44,44" Width="1200" HorizontalAlignment="Center">
 
             <!-- ===== HOME ===== -->
             <StackPanel x:Name="HomePanel" Spacing="20">
-              <Border CornerRadius="22" Background="{DynamicResource HeroGradient}" Padding="30" ClipToBounds="True">
-                <Grid>
-                  <Ellipse Width="300" Height="300" Fill="#12FFFFFF" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-150,-70,0"/>
-                  <Ellipse Width="180" Height="180" Fill="#0EFFFFFF" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,180,-110"/>
-                  <Grid ColumnDefinitions="*,Auto">
+              <Border CornerRadius="18" Background="{DynamicResource HeroGradient}" Padding="26,24">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
                     <StackPanel Spacing="8" VerticalAlignment="Center">
-                      <TextBlock x:Name="HeroGreeting" Text="Welcome back" FontSize="26" FontWeight="SemiBold" Foreground="White"/>
-                      <TextBlock x:Name="HeroSummary" Text="" Foreground="#C9D3F0" TextWrapping="Wrap" MaxWidth="520"/>
+                      <TextBlock x:Name="HeroGreeting" Text="Welcome back" FontSize="26" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap"/>
+                      <TextBlock x:Name="HeroSummary" Text="" Foreground="#AEB9D6" TextWrapping="Wrap"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
-                      <Border Classes="chip streak" HorizontalAlignment="Right">
+                      <Border x:Name="StreakChip" Classes="chip streak" HorizontalAlignment="Right">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                          <Path Classes="icon" Data="M12 3 C12 8 7 9 7 14 A5 5 0 0 0 17 14 C17 11 15 10 14 8 C13 6 12 5 12 3 Z"/>
+                          <Path x:Name="StreakFlame" Classes="flame" Data="M12 3 C13.4 7.2 18 8.6 18 13 A6 6 0 0 1 6 13 C6 9.2 10.6 7.6 12 3 Z"/>
                           <TextBlock x:Name="StreakText" Text="No streak yet" VerticalAlignment="Center"/>
                         </StackPanel>
                       </Border>
-                      <TextBlock x:Name="StreakHint" Text="" Foreground="#C9D3F0" FontSize="12" HorizontalAlignment="Right"/>
+                      <TextBlock x:Name="StreakHint" Text="" Foreground="#AEB9D6" FontSize="12" HorizontalAlignment="Right" TextWrapping="Wrap"/>
                     </StackPanel>
-                  </Grid>
                 </Grid>
               </Border>
 
-              <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
-                <Border Classes="card" Padding="18">
+              <Border Classes="card">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                  <Border Grid.Column="0" Classes="bubble big violet" Width="52" Height="52" CornerRadius="16" VerticalAlignment="Top">
+                    <Path Classes="icon" Data="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="AI progress report" Classes="h2"/>
+                      <Border Classes="badge"><TextBlock Text="AI" FontSize="10"/></Border>
+                    </StackPanel>
+                    <TextBlock x:Name="HomeInsightText" Classes="muted" TextWrapping="Wrap"
+                               Text="Ask the assistant for a quick read on how you're doing — it looks at your streak, completions and open tasks."/>
+                  </StackPanel>
+                  <Button x:Name="HomeInsightButton" Grid.Column="2" Classes="primary" Content="Summarize" Click="HomeInsight_OnClick" VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+
+              <UniformGrid x:Name="StatGrid" Columns="4" Margin="-7,0">
+                <Border Classes="card" Padding="18" Margin="7">
                   <StackPanel Spacing="12">
                     <Border Classes="bubble green"><Path Classes="icon" Data="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M8 12 L11 15 L16 9" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <StackPanel Spacing="2"><TextBlock x:Name="CompletedDay" Text="0" Classes="statNumber"/><TextBlock Text="Done today" Classes="caption"/></StackPanel>
                   </StackPanel>
                 </Border>
-                <Border Grid.Column="1" Classes="card" Padding="18">
+                <Border Classes="card" Padding="18" Margin="7">
                   <StackPanel Spacing="12">
                     <Border Classes="bubble violet"><Path Classes="icon" Data="M4 6 H20 V20 H4 Z M4 10 H20 M8 3 V7 M16 3 V7" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <StackPanel Spacing="2"><TextBlock x:Name="CompletedWeek" Text="0" Classes="statNumber"/><TextBlock Text="This week" Classes="caption"/></StackPanel>
                   </StackPanel>
                 </Border>
-                <Border Grid.Column="2" Classes="card" Padding="18">
+                <Border Classes="card" Padding="18" Margin="7">
                   <StackPanel Spacing="12">
                     <Border Classes="bubble cyan"><Path Classes="icon" Data="M5 20 V12 M12 20 V5 M19 20 V9" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <StackPanel Spacing="2"><TextBlock x:Name="CompletedMonth" Text="0" Classes="statNumber"/><TextBlock Text="This month" Classes="caption"/></StackPanel>
                   </StackPanel>
                 </Border>
-                <Border Grid.Column="3" Classes="card" Padding="18">
+                <Border Classes="card" Padding="18" Margin="7">
                   <StackPanel Spacing="12">
                     <Border Classes="bubble amber"><Path Classes="icon" Data="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <StackPanel Spacing="2"><TextBlock x:Name="CompletedYear" Text="0" Classes="statNumber"/><TextBlock x:Name="CompletedTotalCaption" Text="This year" Classes="caption"/></StackPanel>
                   </StackPanel>
                 </Border>
-              </Grid>
+              </UniformGrid>
 
               <Border Classes="card">
                 <StackPanel Spacing="18">
-                  <Grid ColumnDefinitions="*,Auto">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                     <StackPanel Spacing="3">
                       <TextBlock Text="Completion activity" Classes="h2"/>
                       <TextBlock x:Name="ChartSubtitle" Text="Last 14 days" Classes="caption"/>
@@ -237,7 +255,7 @@
                 </StackPanel>
               </Border>
 
-              <Grid ColumnDefinitions="*,Auto">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="3">
                   <TextBlock Text="Up next" Classes="h2"/>
                   <TextBlock Text="Your next five open tasks, soonest due first." Classes="caption"/>
@@ -250,7 +268,7 @@
                   <StackPanel Spacing="10" HorizontalAlignment="Center">
                     <Border Classes="bubble big violet" HorizontalAlignment="Center"><Path Classes="icon" Data="M5 12.5 L10 17.5 L19 7" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <TextBlock Text="You're all caught up" Classes="h2" HorizontalAlignment="Center"/>
-                    <TextBlock Text="Nothing open right now. Add a task to get rolling." Classes="muted" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Nothing open right now. Add a task to get rolling." Classes="muted" HorizontalAlignment="Center" TextAlignment="Center"/>
                   </StackPanel>
                 </Border>
               </StackPanel>
@@ -291,7 +309,7 @@
                   <StackPanel Spacing="10" HorizontalAlignment="Center">
                     <Border Classes="bubble big green" HorizontalAlignment="Center"><Path Classes="icon" Data="M12 3 A9 9 0 1 0 12 21 A9 9 0 1 0 12 3 M8 12 L11 15 L16 9" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <TextBlock Text="No completed tasks yet" Classes="h2" HorizontalAlignment="Center"/>
-                    <TextBlock Text="Finished tasks land here so you can look back on them." Classes="muted" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Finished tasks land here so you can look back on them." Classes="muted" HorizontalAlignment="Center" TextAlignment="Center"/>
                   </StackPanel>
                 </Border>
               </StackPanel>
@@ -300,10 +318,27 @@
             <!-- ===== SETTINGS ===== -->
             <StackPanel x:Name="SettingsPanel" Spacing="18" IsVisible="False">
               <Border Classes="card" Padding="26">
+                <StackPanel Spacing="18">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="Profile" Classes="h2"/>
+                    <TextBlock Text="Your name is saved locally in settings.json and used to greet you." Classes="muted" TextWrapping="Wrap"/>
+                  </StackPanel>
+                  <StackPanel>
+                    <TextBlock Classes="fieldLabel" Text="Username"/>
+                    <TextBox x:Name="UsernameBox" MaxLength="40" PlaceholderText="How should we greet you?"/>
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="SaveProfileButton" Classes="primary" Content="Save profile" Click="SaveProfile_OnClick"/>
+                    <Button Content="Replay tutorial" Click="ReplayTutorial_OnClick"/>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card" Padding="26">
                 <StackPanel Spacing="20">
                   <StackPanel Spacing="4">
                     <TextBlock Text="AI providers" Classes="h2"/>
-                    <TextBlock Text="Connect a provider, load its current model list, and try it out." Classes="muted" TextWrapping="Wrap"/>
+                    <TextBlock Text="Connect a provider, load its current model list, and try it out. The assistant uses this configuration." Classes="muted" TextWrapping="Wrap"/>
                   </StackPanel>
 
                   <StackPanel>
@@ -372,6 +407,40 @@
           </Grid>
         </ScrollViewer>
       </Grid>
+
+      <!-- ================= AI assistant sidebar ================= -->
+      <Border x:Name="AiSidebar" Grid.Column="2" Width="380" MinWidth="300" IsVisible="False"
+              Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1,0,0,0">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <Border Grid.Row="0" Padding="18,20" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+              <Image Width="30" Height="30" Source="{DynamicResource LogoMark}" VerticalAlignment="Center"/>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="AI assistant" FontWeight="SemiBold"/>
+                <TextBlock x:Name="AiSidebarStatus" Classes="caption" TextWrapping="Wrap"/>
+              </StackPanel>
+              <Button Grid.Column="2" Classes="ghost" Click="CloseAssistant_OnClick" ToolTip.Tip="Close assistant" AutomationProperties.Name="Close assistant">
+                <Path Classes="icon" Data="M6 6 L18 18 M18 6 L6 18"/>
+              </Button>
+            </Grid>
+          </Border>
+
+          <ScrollViewer Grid.Row="1" x:Name="ChatScroll" VerticalScrollBarVisibility="Auto" Padding="16">
+            <StackPanel x:Name="ChatList" Spacing="8"/>
+          </ScrollViewer>
+
+          <Border Grid.Row="2" Padding="16" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Spacing="10">
+              <TextBox x:Name="ChatInput" AcceptsReturn="True" Height="80" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                       PlaceholderText="Ask me to add, finish or reschedule tasks…" KeyDown="ChatInput_OnKeyDown"/>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock x:Name="ChatHint" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <Button x:Name="ChatSendButton" Grid.Column="1" Classes="primary" Content="Send" Click="ChatSend_OnClick"/>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
     </Grid>
 
     <!-- ================= Toast ================= -->
@@ -381,5 +450,44 @@
         <TextBlock x:Name="ToastText" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560"/>
       </StackPanel>
     </Border>
+
+    <!-- ================= Onboarding / tutorial ================= -->
+    <Grid x:Name="OnboardingOverlay" IsVisible="False" Background="{DynamicResource OverlayBrush}">
+      <Border Classes="onboard" Width="620" MaxWidth="620" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="14">
+            <Image Width="40" Height="40" Source="{DynamicResource LogoMark}" VerticalAlignment="Center"/>
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Text="OpenToDo" FontSize="17" FontWeight="SemiBold"/>
+              <TextBlock x:Name="OnboardStepLabel" Classes="caption" Text="Step 1 of 6"/>
+            </StackPanel>
+          </StackPanel>
+
+          <Grid Grid.Row="1" Margin="0,26,0,24" MinHeight="236">
+            <StackPanel x:Name="OnboardUsernameStep" Spacing="14">
+              <TextBlock Text="Welcome" Classes="h2"/>
+              <TextBlock Text="Let's set things up. What should we call you? Your name is stored locally in settings.json and used to greet you across the app."
+                         Classes="muted" TextWrapping="Wrap"/>
+              <TextBox x:Name="OnboardUsernameBox" MaxLength="40" PlaceholderText="e.g. Alex" KeyDown="OnboardUsername_OnKeyDown"/>
+              <TextBlock x:Name="OnboardError" Classes="formError" IsVisible="False" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <StackPanel x:Name="OnboardTutorialStep" Spacing="16" IsVisible="False">
+              <Border Classes="iconTile">
+                <Path x:Name="OnboardIcon" Classes="icon" Data="M3 11 L12 3 L21 11 M5 9.5 V20 H10 V14 H14 V20 H19 V9.5"/>
+              </Border>
+              <TextBlock x:Name="OnboardTitle" Classes="h2" Text="Home" TextWrapping="Wrap"/>
+              <TextBlock x:Name="OnboardBody" Classes="muted" TextWrapping="Wrap" Text=""/>
+            </StackPanel>
+          </Grid>
+
+          <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+            <Button x:Name="OnboardBackButton" Content="Back" Click="OnboardBack_OnClick" IsVisible="False"/>
+            <Button x:Name="OnboardSkipButton" Grid.Column="2" Content="Skip tour" Click="OnboardSkip_OnClick" IsVisible="False"/>
+            <Button x:Name="OnboardNextButton" Grid.Column="3" Classes="primary" Content="Continue" Click="OnboardNext_OnClick"/>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
   </Grid>
 </Window>

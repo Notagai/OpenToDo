@@ -17,11 +17,36 @@ public partial class MainWindow : Window
     private const int ChartDays = 14;
     private const double ChartMaxBarHeight = 112;
 
+    /// <summary>Slides shown after the username step of the first-run tour.</summary>
+    private static readonly (string Icon, string Title, string Body)[] TutorialPages =
+    {
+        ("M3 11 L12 3 L21 11 M5 9.5 V20 H10 V14 H14 V20 H19 V9.5",
+            "Your dashboard",
+            "Home shows your streak, completions for today, this week, this month and this year, a 14-day activity chart, and the five tasks due soonest."),
+        ("M9 6 H20 M9 12 H20 M9 18 H20 M4 6 L5 7 L7 5 M4 12 L5 13 L7 11 M4 18 L5 19 L7 17",
+            "Capture tasks fast",
+            "Use the quick-add bar on To-do, or press Ctrl+N anywhere for the full editor. Add notes and due dates, then search to find anything instantly."),
+        ("M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z",
+            "AI at your side",
+            "Connect a provider in Settings, then open the Assistant. Ask it to add tasks, mark them done or reschedule them — and get a progress report right on Home."),
+        ("M5 20 V12 M12 20 V5 M19 20 V9",
+            "See your momentum",
+            "The activity chart toggles between a graph and exact numbers. Finish at least one task a day to grow your streak — the flame lights up as it climbs."),
+        ("M4 7 H20 M4 17 H20 M9 4 V10 M15 14 V20",
+            "Make it yours",
+            "Change your username, connect AI providers and replay this tour any time from Settings."),
+        ("M5 12.5 L10 17.5 L19 7",
+            "You're all set",
+            "Everything is stored locally on this device as plain files — no account, no cloud. Add your first task and get going."),
+    };
+
     private readonly JsonTaskRepository _repository =
         new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenToDo", "tasks"));
     private readonly AiSettingsStore _settingsStore = new();
     private readonly AiClient _aiClient = new();
+    private readonly AiAssistant _assistant;
     private readonly List<TaskItem> _tasks = [];
+    private readonly List<AiPromptMessage> _chatHistory = [];
     private readonly Dictionary<AiProvider, string[]> _modelCache = new();
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMinutes(1) };
     private readonly DispatcherTimer _toastTimer = new();
@@ -29,15 +54,23 @@ public partial class MainWindow : Window
     private AiSettings _aiSettings = new();
     private AiProvider _formProvider = AiProvider.OpenAI;
     private CancellationTokenSource? _aiCts;
+    private CancellationTokenSource? _chatCts;
+    private CancellationTokenSource? _insightCts;
     private string _currentView = "home";
     private DateTime _renderedDay = DateTime.Today;
     private bool _mutationInProgress;
     private bool _aiBusy;
+    private bool _chatBusy;
+    private bool _insightBusy;
     private bool _ready;
+    private bool _onboardReplay;
+    private int _onboardStep;
+    private string _pendingUsername = string.Empty;
 
     public MainWindow()
     {
         InitializeComponent();
+        _assistant = new AiAssistant(_aiClient);
         _ready = true;
 
         TemperatureBox.Value = 0.7m;
@@ -64,12 +97,21 @@ public partial class MainWindow : Window
                 RefreshAll();
         };
 
+        // Bounds is a plain AvaloniaProperty, so observing it works on every Avalonia version.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty)
+                ApplyResponsiveLayout(Bounds.Width);
+        };
+
         KeyDown += OnWindowKeyDown;
         Opened += async (_, _) => await StartupAsync();
         Closed += (_, _) =>
         {
             _clock.Stop();
             _aiCts?.Cancel();
+            _chatCts?.Cancel();
+            _insightCts?.Cancel();
         };
     }
 
@@ -77,6 +119,8 @@ public partial class MainWindow : Window
 
     private async Task StartupAsync()
     {
+        var settingsExisted = _settingsStore.Exists;
+
         // Settings and tasks load independently: a damaged settings file must never hide the user's tasks.
         try
         {
@@ -90,8 +134,22 @@ public partial class MainWindow : Window
             ShowToast($"Couldn't load settings: {ex.Message}", isError: true);
         }
 
+        UsernameBox.Text = _aiSettings.Username;
         _formProvider = SelectedProvider;
         LoadProviderSettings();
+
+        // First run: create settings.json straight away so it exists even if the app is closed mid-onboarding.
+        if (!settingsExisted)
+        {
+            try
+            {
+                await _settingsStore.SaveAsync(_aiSettings);
+            }
+            catch (Exception ex)
+            {
+                ShowToast($"Couldn't create settings.json: {ex.Message}", isError: true);
+            }
+        }
 
         try
         {
@@ -105,6 +163,12 @@ public partial class MainWindow : Window
             ShowToast($"Couldn't load tasks: {ex.Message}", isError: true);
         }
 
+        UpdateAssistantStatus();
+
+        if (!_aiSettings.OnboardingCompleted || string.IsNullOrWhiteSpace(_aiSettings.Username))
+            ShowOnboarding(replay: false);
+
+        ApplyResponsiveLayout(Bounds.Width);
         _clock.Start();
     }
 
@@ -123,6 +187,35 @@ public partial class MainWindow : Window
             e.Handled = true;
             NewTask_OnClick(this, new RoutedEventArgs());
         }
+    }
+
+    // ------------------------------------------------------------------ responsive layout
+
+    /// <summary>Keeps the dashboard coherent everywhere from 720p up to 8K: fluid margins, a capped content
+    /// width that stays centred, and a stat grid that drops to two columns on narrow windows.</summary>
+    private void ApplyResponsiveLayout(double width)
+    {
+        if (double.IsNaN(width) || width <= 0)
+            return;
+
+        var compact = width < 1120;
+        var margin = compact ? 22.0 : 44.0;
+
+        HeaderBar.Margin = new Thickness(margin, compact ? 20 : 34, margin, 0);
+        ContentRoot.Margin = new Thickness(margin, compact ? 18 : 26, margin, compact ? 26 : 44);
+
+        AiSidebar.Width = width < 1240 ? 320 : 400;
+
+        // Explicit width + centered alignment keeps the dashboard column centred on 8K displays and
+        // still filling the window at 720p, instead of leaving a lopsided gap on the right.
+        var reserved = 252 + (AiSidebar.IsVisible ? AiSidebar.Width : 0) + (2 * margin);
+        var contentWidth = Math.Clamp(width - reserved, 200, 1600);
+        ContentRoot.Width = contentWidth;
+        HeaderBar.Width = contentWidth; // keep the page header aligned with the content column
+
+        var columns = width < 1040 ? 2 : 4;
+        if (StatGrid.Columns != columns)
+            StatGrid.Columns = columns;
     }
 
     // ------------------------------------------------------------------ rendering
@@ -147,7 +240,7 @@ public partial class MainWindow : Window
         {
             "todo" => "Everything that still needs doing.",
             "completed" => "A look back at what you've finished.",
-            "settings" => "AI providers and application configuration.",
+            "settings" => "Your profile, AI providers and application configuration.",
             _ => today.ToString("dddd, MMMM d")
         };
 
@@ -209,13 +302,18 @@ public partial class MainWindow : Window
         var dueToday = active.Count(t => TaskQueries.IsDueToday(t, today));
 
         var hour = DateTime.Now.Hour;
-        HeroGreeting.Text = hour switch
+        var greeting = hour switch
         {
             < 5 => "Still up?",
             < 12 => "Good morning",
             < 18 => "Good afternoon",
             _ => "Good evening"
         };
+
+        var name = _aiSettings.Username?.Trim();
+        var hasName = !string.IsNullOrEmpty(name);
+        HeroGreeting.Text = hasName ? $"{greeting}, {name}" : greeting;
+        Title = hasName ? $"OpenToDo — {name}" : "OpenToDo";
 
         if (active.Length == 0)
         {
@@ -231,13 +329,16 @@ public partial class MainWindow : Window
             HeroSummary.Text = string.Join("  ·  ", parts);
         }
 
-        StreakText.Text = summary.Streak switch
+        var streak = summary.Streak;
+        StreakText.Text = streak switch
         {
             0 => "No streak yet",
             1 => "1 day streak",
-            _ => $"{summary.Streak} day streak"
+            _ => $"{streak} day streak"
         };
-        StreakHint.Text = summary.Streak > 0 && summary.Today == 0
+        SetClass(StreakChip, "lit", streak > 0);
+        SetClass(StreakFlame, "lit", streak > 0);
+        StreakHint.Text = streak > 0 && summary.Today == 0
             ? "Finish a task today to keep it alive"
             : $"{summary.Total} completed all-time";
 
@@ -315,6 +416,130 @@ public partial class MainWindow : Window
         _currentView = view;
         RefreshAll();
     }
+
+    // ------------------------------------------------------------------ onboarding
+
+    private void ShowOnboarding(bool replay)
+    {
+        _onboardReplay = replay;
+        _onboardStep = replay ? 1 : 0;
+        _pendingUsername = _aiSettings.Username;
+        OnboardUsernameBox.Text = _aiSettings.Username;
+        OnboardError.IsVisible = false;
+        OnboardingOverlay.IsVisible = true;
+        RenderOnboarding();
+
+        if (!replay)
+            OnboardUsernameBox.Focus();
+    }
+
+    private void RenderOnboarding()
+    {
+        var total = TutorialPages.Length + 1;
+        var onUsername = _onboardStep == 0;
+
+        OnboardUsernameStep.IsVisible = onUsername;
+        OnboardTutorialStep.IsVisible = !onUsername;
+        OnboardStepLabel.Text = $"Step {_onboardStep + 1} of {total}";
+
+        if (!onUsername)
+        {
+            var page = TutorialPages[_onboardStep - 1];
+            OnboardIcon.Data = Geometry.Parse(page.Icon);
+            OnboardTitle.Text = page.Title;
+            OnboardBody.Text = page.Body;
+        }
+
+        OnboardBackButton.IsVisible = _onboardStep > 0;
+        OnboardSkipButton.IsVisible = !_onboardReplay;
+        OnboardNextButton.Content = _onboardStep >= total - 1 ? "Get started" : "Continue";
+        OnboardError.IsVisible = false;
+    }
+
+    private void OnboardNext_OnClick(object? sender, RoutedEventArgs e) => AdvanceOnboarding();
+
+    private void OnboardUsername_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+
+        e.Handled = true;
+        AdvanceOnboarding();
+    }
+
+    private void AdvanceOnboarding()
+    {
+        if (_onboardStep == 0)
+        {
+            var name = OnboardUsernameBox.Text?.Trim() ?? string.Empty;
+            if (name.Length == 0)
+            {
+                OnboardError.Text = "Please enter a name so we know what to call you.";
+                OnboardError.IsVisible = true;
+                OnboardUsernameBox.Focus();
+                return;
+            }
+
+            _pendingUsername = name.Length > AiSettings.MaxUsernameLength ? name[..AiSettings.MaxUsernameLength] : name;
+        }
+
+        var total = TutorialPages.Length + 1;
+        if (_onboardStep >= total - 1)
+        {
+            FinishOnboarding();
+            return;
+        }
+
+        _onboardStep++;
+        RenderOnboarding();
+    }
+
+    private void OnboardBack_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (_onboardStep == 0)
+            return;
+
+        _onboardStep--;
+        RenderOnboarding();
+    }
+
+    private void OnboardSkip_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (_onboardStep == 0)
+        {
+            var name = OnboardUsernameBox.Text?.Trim() ?? string.Empty;
+            if (name.Length > 0)
+                _pendingUsername = name.Length > AiSettings.MaxUsernameLength ? name[..AiSettings.MaxUsernameLength] : name;
+        }
+
+        FinishOnboarding();
+    }
+
+    private async void FinishOnboarding()
+    {
+        OnboardingOverlay.IsVisible = false;
+
+        _aiSettings.Username = string.IsNullOrWhiteSpace(_pendingUsername) ? _aiSettings.Username : _pendingUsername;
+        _aiSettings.OnboardingCompleted = true;
+        UsernameBox.Text = _aiSettings.Username;
+
+        try
+        {
+            await _settingsStore.SaveAsync(_aiSettings);
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Couldn't save your settings: {ex.Message}", isError: true);
+        }
+
+        RefreshAll();
+        UpdateAssistantStatus();
+
+        if (!string.IsNullOrWhiteSpace(_aiSettings.Username))
+            ShowToast($"You're all set, {_aiSettings.Username}!");
+    }
+
+    private void ReplayTutorial_OnClick(object? sender, RoutedEventArgs e) => ShowOnboarding(replay: true);
 
     // ------------------------------------------------------------------ task actions
 
@@ -475,6 +700,13 @@ public partial class MainWindow : Window
         _ => AiProvider.OpenAI
     };
 
+    private string KeyFor(AiProvider provider) => provider switch
+    {
+        AiProvider.Groq => _aiSettings.GroqApiKey,
+        AiProvider.OpenRouter => _aiSettings.OpenRouterApiKey,
+        _ => _aiSettings.OpenAiApiKey
+    };
+
     private void Provider_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (!_ready || ApiKeyBox is null)
@@ -515,12 +747,7 @@ public partial class MainWindow : Window
     private void LoadProviderSettings()
     {
         var provider = SelectedProvider;
-        ApiKeyBox.Text = provider switch
-        {
-            AiProvider.Groq => _aiSettings.GroqApiKey,
-            AiProvider.OpenRouter => _aiSettings.OpenRouterApiKey,
-            _ => _aiSettings.OpenAiApiKey
-        };
+        ApiKeyBox.Text = KeyFor(provider);
 
         var model = GetStoredModel(provider);
         var items = new List<string>(_modelCache.TryGetValue(provider, out var cached) ? cached : Array.Empty<string>());
@@ -536,6 +763,7 @@ public partial class MainWindow : Window
         MaxOutputTokensBox.Value = Math.Clamp(_aiSettings.MaxOutputTokens, 1, AiSettings.MaxTokenLimit);
         UpdateTemperatureHint();
         SetStatus($"{provider}: fetch models to validate the key and load the current model list.");
+        UpdateAssistantStatus();
     }
 
     private void UpdateTemperatureHint()
@@ -630,6 +858,7 @@ public partial class MainWindow : Window
             }
 
             SetStatus($"Loaded {ids.Length} models from {provider}.", "ok");
+            UpdateAssistantStatus();
         });
     }
 
@@ -662,6 +891,29 @@ public partial class MainWindow : Window
         finally
         {
             SetAiBusy(false);
+            UpdateAssistantStatus();
+        }
+    }
+
+    private async void SaveProfile_OnClick(object? sender, RoutedEventArgs e)
+    {
+        var name = UsernameBox.Text?.Trim() ?? string.Empty;
+        if (name.Length > AiSettings.MaxUsernameLength)
+            name = name[..AiSettings.MaxUsernameLength];
+
+        _aiSettings.Username = name;
+
+        try
+        {
+            await _settingsStore.SaveAsync(_aiSettings);
+            UsernameBox.Text = name;
+            RefreshAll();
+            UpdateAssistantStatus();
+            ShowToast(string.IsNullOrEmpty(name) ? "Profile saved" : $"Profile saved — hello, {name}!");
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Couldn't save your profile: {ex.Message}", isError: true);
         }
     }
 
@@ -689,5 +941,291 @@ public partial class MainWindow : Window
                 throw;
             }
         });
+    }
+
+    // ------------------------------------------------------------------ AI assistant sidebar
+
+    private void ToggleAssistant_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (AiSidebar.IsVisible)
+            CloseAssistant();
+        else
+            OpenAssistant();
+    }
+
+    private void CloseAssistant_OnClick(object? sender, RoutedEventArgs e) => CloseAssistant();
+
+    private void OpenAssistant()
+    {
+        AiSidebar.IsVisible = true;
+        SetClass(NavAssistant, "active", true);
+        ApplyResponsiveLayout(Bounds.Width);
+        UpdateAssistantStatus();
+        RefreshChatHint();
+
+        if (ChatList.Children.Count == 0)
+            AddChatBubble(AiChatMessage.Assistant(
+                "Hi! I can add tasks, mark them done, reschedule or clean them up. Try “add pay rent tomorrow” or “mark the report as done”."));
+
+        ChatInput.Focus();
+    }
+
+    private void CloseAssistant()
+    {
+        AiSidebar.IsVisible = false;
+        SetClass(NavAssistant, "active", false);
+        ApplyResponsiveLayout(Bounds.Width);
+    }
+
+    private void UpdateAssistantStatus()
+    {
+        var provider = SelectedProvider;
+        var model = GetStoredModel(provider);
+        var configured = !string.IsNullOrWhiteSpace(KeyFor(provider)) && !string.IsNullOrWhiteSpace(model);
+        AiSidebarStatus.Text = configured ? $"{provider} · {model}" : "Not configured";
+        if (ChatHint is not null)
+            RefreshChatHint();
+    }
+
+    private void RefreshChatHint() =>
+        ChatHint.Text = TryGetAiConfig(out _, out _, out _, out var error) ? "Enter to send" : error;
+
+    private bool TryGetAiConfig(out AiProvider provider, out string key, out string model, out string error)
+    {
+        CommitFormToSettings(_formProvider);
+        provider = SelectedProvider;
+        key = KeyFor(provider);
+        model = GetStoredModel(provider);
+
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            error = $"Add a {provider} API key in Settings to use the assistant.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            error = $"Pick a {provider} model in Settings (use “Fetch models”).";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private void ChatInput_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && (e.KeyModifiers & KeyModifiers.Shift) == 0)
+        {
+            e.Handled = true;
+            _ = SendChatAsync();
+        }
+    }
+
+    private void ChatSend_OnClick(object? sender, RoutedEventArgs e) => _ = SendChatAsync();
+
+    private async Task SendChatAsync()
+    {
+        if (_chatBusy)
+            return;
+
+        var text = ChatInput.Text?.Trim();
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        if (!TryGetAiConfig(out var provider, out var key, out var model, out var error))
+        {
+            AddChatBubble(AiChatMessage.Note(error));
+            return;
+        }
+
+        var history = _chatHistory.ToArray();
+        ChatInput.Text = string.Empty;
+        AddChatBubble(AiChatMessage.User(text));
+        _chatHistory.Add(new AiPromptMessage("user", text));
+
+        _chatBusy = true;
+        ChatSendButton.IsEnabled = false;
+        ChatInput.IsEnabled = false;
+        AiSidebarStatus.Text = "Thinking…";
+
+        _chatCts?.Dispose();
+        _chatCts = new CancellationTokenSource();
+
+        try
+        {
+            var context = TaskInsights.BuildContext(_tasks, DateTime.Today, _aiSettings.Username);
+            var tokens = Math.Clamp(_aiSettings.MaxOutputTokens, 128, 1500);
+            var response = await _assistant.SendAsync(
+                provider, key, model, _aiSettings.Temperature, tokens,
+                context, history, text, _chatCts.Token);
+
+            AddChatBubble(AiChatMessage.Assistant(response.Message));
+            _chatHistory.Add(new AiPromptMessage("assistant", response.Message));
+
+            await ApplyAssistantCommandsAsync(response.Commands);
+        }
+        catch (OperationCanceledException)
+        {
+            AddChatBubble(AiChatMessage.Note("Request cancelled."));
+        }
+        catch (Exception ex)
+        {
+            AddChatBubble(AiChatMessage.Note($"Couldn't reach the AI: {ex.Message}"));
+        }
+        finally
+        {
+            _chatBusy = false;
+            ChatSendButton.IsEnabled = true;
+            ChatInput.IsEnabled = true;
+            UpdateAssistantStatus();
+            ChatInput.Focus();
+        }
+    }
+
+    /// <summary>Applies the task changes the assistant asked for, persisting each one and reporting back in the chat.</summary>
+    private async Task ApplyAssistantCommandsAsync(IReadOnlyList<TaskCommand> commands)
+    {
+        if (commands is null || commands.Count == 0)
+            return;
+
+        var today = DateTime.Today;
+        var now = DateTimeOffset.Now;
+        var working = _tasks.ToList();
+        var applied = 0;
+
+        foreach (var command in commands)
+        {
+            var outcome = TaskCommandPlanner.Apply(command, working, today, now);
+
+            if (outcome.Item is not null)
+            {
+                await _repository.SaveAsync(outcome.Item);
+                var index = working.FindIndex(t => t.Id == outcome.Item.Id);
+                if (index >= 0)
+                    working[index] = outcome.Item;
+                else
+                    working.Add(outcome.Item);
+
+                applied++;
+                AddChatBubble(AiChatMessage.Note($"✓ {outcome.Message}"));
+            }
+            else if (outcome.DeleteId is not null)
+            {
+                await _repository.DeleteAsync(outcome.DeleteId);
+                working.RemoveAll(t => t.Id == outcome.DeleteId);
+                applied++;
+                AddChatBubble(AiChatMessage.Note($"✓ {outcome.Message}"));
+            }
+            else
+            {
+                AddChatBubble(AiChatMessage.Note(outcome.Message));
+            }
+        }
+
+        if (applied > 0)
+        {
+            await LoadTasksAsync();
+            ShowToast($"{applied} task{(applied == 1 ? "" : "s")} updated by the assistant");
+        }
+    }
+
+    private void AddChatBubble(AiChatMessage message)
+    {
+        ChatList.Children.Add(BuildChatBubble(message));
+
+        // Scroll to the newest bubble once layout has settled (the setter clamps to the real extent).
+        Dispatcher.UIThread.Post(
+            () => ChatScroll.Offset = new Vector(ChatScroll.Offset.X, ChatScroll.Extent.Height),
+            DispatcherPriority.Background);
+    }
+
+    private Control BuildChatBubble(AiChatMessage message)
+    {
+        var border = new Border
+        {
+            HorizontalAlignment = message.Alignment,
+            MaxWidth = 300,
+            Child = new SelectableTextBlock
+            {
+                Text = message.Text,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = message.IsNote ? 12 : 14,
+                Foreground = Resolve(message.IsNote ? "MutedBrush" : "TextBrush")
+            }
+        };
+
+        border.Classes.Add("chat");
+        if (message.IsUser)
+            border.Classes.Add("user");
+        if (message.IsNote)
+            border.Classes.Add("note");
+
+        return border;
+    }
+
+    private static IBrush Resolve(string key)
+    {
+        if (Application.Current is { } app &&
+            app.Resources.TryGetResource(key, null, out var value) &&
+            value is IBrush brush)
+            return brush;
+
+        return Brushes.White;
+    }
+
+    // ------------------------------------------------------------------ home AI insight
+
+    private async void HomeInsight_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (_insightBusy)
+            return;
+
+        if (!TryGetAiConfig(out var provider, out var key, out var model, out var error))
+        {
+            HomeInsightText.Text = error;
+            return;
+        }
+
+        _insightBusy = true;
+        HomeInsightButton.IsEnabled = false;
+        HomeInsightText.Text = "Looking over your tasks…";
+
+        _insightCts?.Dispose();
+        _insightCts = new CancellationTokenSource();
+
+        try
+        {
+            var context = TaskInsights.BuildContext(_tasks, DateTime.Today, _aiSettings.Username);
+            var messages = new[]
+            {
+                new AiPromptMessage("system", context),
+                new AiPromptMessage("user",
+                    "In two or three short sentences, summarize how this person is doing with their tasks. " +
+                    "Mention their streak and any overdue items, be encouraging but honest, and suggest one concrete next step. " +
+                    "Reply in plain sentences — no lists, headings or JSON.")
+            };
+
+            var raw = await _aiClient.GenerateChatAsync(
+                provider, key, model, messages, _aiSettings.Temperature,
+                Math.Clamp(_aiSettings.MaxOutputTokens, 128, 400), _insightCts.Token);
+
+            HomeInsightText.Text = string.IsNullOrWhiteSpace(raw)
+                ? "No summary came back — give it another try."
+                : raw.Trim();
+        }
+        catch (OperationCanceledException)
+        {
+            HomeInsightText.Text = "Summary cancelled.";
+        }
+        catch (Exception ex)
+        {
+            HomeInsightText.Text = $"Couldn't reach the AI: {ex.Message}";
+        }
+        finally
+        {
+            _insightBusy = false;
+            HomeInsightButton.IsEnabled = true;
+        }
     }
 }

@@ -11,5 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenToDo.Core\OpenToDo.Core.csproj" />
     <ProjectReference Include="..\..\src\OpenToDo.Data\OpenToDo.Data.csproj" />
+    <ProjectReference Include="..\..\src\OpenToDo.Plugins\OpenToDo.Plugins.csproj" />
   </ItemGroup>
 </Project>
